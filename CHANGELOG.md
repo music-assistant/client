@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/music-assistant/client/compare/v1.0.3...v1.0.4) (2024-10-30)
+
+
+### Features
+
+* Add missing helper functions ([d6f4da6](https://github.com/music-assistant/client/commit/d6f4da6e78e64351f4967bd7accf145cc491cb65))
+
 ## [1.0.3](https://github.com/music-assistant/client/compare/v1.0.2...v1.0.3) (2024-10-30)
 
 
