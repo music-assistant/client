@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/music-assistant/client/compare/v1.0.2...v1.0.3) (2024-10-30)
+
+
+### Bug Fixes
+
+* function names had wrong names ([0f3b842](https://github.com/music-assistant/client/commit/0f3b84260ecf57c6eab50e4914f3d485d355c883))
+
 ## [1.0.2](https://github.com/music-assistant/client/compare/v1.0.1...v1.0.2) (2024-10-30)
 
 
