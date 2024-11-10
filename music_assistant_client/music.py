@@ -622,7 +622,9 @@ class Music:
             search_name = f"{artist} - {name}"
         search_results = await self.search(
             search_query=search_name,
-            media_types=[media_type] if media_type else MediaType.ALL,
+            media_types=[media_type]
+            if media_type and media_type != MediaType.UNKNOWN
+            else MediaType.ALL,
             limit=5,
         )
         for results in (
