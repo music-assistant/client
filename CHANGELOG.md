@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6](https://github.com/music-assistant/client/compare/v1.0.5...v1.0.6) (2024-11-10)
+
+
+### Bug Fixes
+
+* search issue with integration passing MediaType.UNKNOWN ([#11](https://github.com/music-assistant/client/issues/11)) ([6aea1e9](https://github.com/music-assistant/client/commit/6aea1e95efdad639b581ec4a439e4a44d088b68d))
+
 ## [1.0.5](https://github.com/music-assistant/client/compare/v1.0.4...v1.0.5) (2024-10-30)
 
 
