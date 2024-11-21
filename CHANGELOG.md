@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.7](https://github.com/music-assistant/client/compare/v1.0.6...v1.0.7) (2024-11-21)
+
+
+### Features
+
+* Adjust group commands to new syntax ([20691fe](https://github.com/music-assistant/client/commit/20691feefe7e6d4f59fea718cdb0c6429882c61e))
+* Bump models to 1.1.2 ([20691fe](https://github.com/music-assistant/client/commit/20691feefe7e6d4f59fea718cdb0c6429882c61e))
+* Bump models to 1.1.2 ([20691fe](https://github.com/music-assistant/client/commit/20691feefe7e6d4f59fea718cdb0c6429882c61e))
+
 ## [1.0.6](https://github.com/music-assistant/client/compare/v1.0.5...v1.0.6) (2024-11-10)
 
 
