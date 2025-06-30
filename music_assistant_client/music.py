@@ -14,7 +14,6 @@ from music_assistant_models.media_items import (
     MediaItemImage,
     MediaItemMetadata,
     MediaItemType,
-    MediaItemTypeOrItemMapping,
     Playlist,
     Podcast,
     PodcastEpisode,
@@ -719,7 +718,7 @@ class Music:
         artist: str | None = None,
         album: str | None = None,
         media_type: MediaType | None = None,
-    ) -> MediaItemTypeOrItemMapping | None:
+    ) -> MediaItemType | ItemMapping | None:
         """Try to find a media item (such as a playlist) by name."""
         # pylint: disable=too-many-nested-blocks
         searchname = name.lower()
