@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from music_assistant_models.enums import EventType, MediaType
-from music_assistant_models.errors import PlayerCommandFailed, PlayerUnavailableError
-from music_assistant_models.helpers import create_sort_name
-from music_assistant_models.media_items import Track
+from music_assistant_models.errors import (
+    MusicAssistantError,
+    PlayerCommandFailed,
+    PlayerUnavailableError,
+)
 from music_assistant_models.player import Player
 
 if TYPE_CHECKING:
@@ -205,44 +208,69 @@ class Players:
         Will raise an error if the player is not currently playing anything
         or if the currently playing media can not be resolved to a media item.
         """
+        assert self.client.server_info  # for type checking
+        if self.client.server_info.schema_version >= 27:
+            # if the server supports the new favorites endpoint, use that
+            await self.client.send_command(
+                "players/add_currently_playing_to_favorites", player_id=player_id
+            )
+            return
+        # Fallback implementation for older server versions.
+        # TODO: remove this after a while, once all/most servers are updated
+
+        # guard for unknown player - which should not happen, but just in case
         if not (player := self._players.get(player_id)):
             raise PlayerUnavailableError(f"Player {player_id} not found")
-        if not player.active_source:
-            raise PlayerCommandFailed("Player has no active source")
-        if mass_queue := self.client.player_queues.get(player.active_source):
+        # handle mass player queue active
+        if mass_queue := await self.client.player_queues.get_active_queue(player_id):
             if not (current_item := mass_queue.current_item) or not current_item.media_item:
                 raise PlayerCommandFailed("No current item to add to favorites")
             # if we're playing a radio station, try to resolve the currently playing track
-            if (
-                current_item.media_item.media_type == MediaType.RADIO
-                and (streamdetails := mass_queue.current_item.streamdetails)
-                and (stream_title := streamdetails.stream_title)
-                and " - " in stream_title
-            ):
-                search_result = await self.client.music.search(
-                    search_query=stream_title,
-                    media_types=[MediaType.TRACK],
-                )
-                for search_track in search_result.tracks:
-                    if not isinstance(search_track, Track):
-                        continue
-                    # check if the artist and title match
-                    # for now we only allow a strict match on the artist and title
-                    artist, title = stream_title.split(" - ", 1)
-                    if create_sort_name(artist) != create_sort_name(search_track.artist_str):
-                        continue
-                    if create_sort_name(title) != create_sort_name(search_track.name):
-                        continue
-                    # we found a match, add it to the favorites
-                    await self.client.music.add_item_to_favorites(search_track)
+            if current_item.media_item.media_type == MediaType.RADIO:
+                if not (
+                    (streamdetails := mass_queue.current_item.streamdetails)
+                    and (stream_title := streamdetails.stream_title)
+                    and " - " in stream_title
+                ):
+                    # no stream title available, so we can't resolve the track
+                    # this can happen if the radio station does not provide metadata
+                    # or there's a commercial break
+                    # Possible future improvement could be to actually detect the song with a
+                    # shazam-like approach.
+                    raise PlayerCommandFailed("No current item to add to favorites")
+                # send the streamtitle into a global search query
+                search_artist, search_title_title = stream_title.split(" - ", 1)
+                if track := await self.client.music.get_track_by_name(
+                    search_title_title, search_artist
+                ):
+                    # we found a track, so add it to the favorites
+                    await self.client.music.add_item_to_favorites(track)
                     return
-            # any other media item, just add it to the favorites
+            # any other media item, just add it to the favorites directly
             await self.client.music.add_item_to_favorites(current_item.media_item)
             return
-        # handle other source active using the current_media
-        if not (current_media := player.current_media) or not current_media.uri:
-            raise PlayerCommandFailed("No current item to add to favorites")
-        await self.client.music.add_item_to_favorites(current_media.uri)
+        # guard for player with no active source
+        if not player.active_source:
+            raise PlayerCommandFailed("Player has no active source")
+        # handle other source active using the current_media with uri
+        if current_media := player.current_media:
+            # prefer the uri of the current media item
+            if current_media.uri:
+                with suppress(MusicAssistantError):
+                    await self.client.music.add_item_to_favorites(current_media.uri)
+                    return
+            # fallback to search based on artist and title (and album if available)
+            if current_media.artist and current_media.title:  # noqa: SIM102
+                if track := await self.client.music.get_track_by_name(
+                    current_media.title,
+                    current_media.artist,
+                    current_media.album,
+                ):
+                    # we found a track, so add it to the favorites
+                    await self.client.music.add_item_to_favorites(track)
+                    return
+        # if we reach here, we could not resolve the currently playing item
+        raise PlayerCommandFailed("No current item to add to favorites")
 
     # Other endpoints/commands
 
