@@ -741,6 +741,25 @@ class Music:
                     )
                 return search_track
 
+        # try to handle case where something is appended to the title
+        for splitter in ("•", "-", "|", "(", "["):
+            if splitter in track_name:
+                return await self.get_track_by_name(
+                    track_name=track_name.split(splitter)[0].strip(),
+                    artist_name=artist_name,
+                    album_name=None,
+                    track_version=track_version,
+                )
+        # try to handle case where multiple artists are listed as single string
+        if artist_name:
+            for splitter in ("•", ",", "&", "/", "|", "/"):
+                if splitter in artist_name:
+                    return await self.get_track_by_name(
+                        track_name=track_name,
+                        artist_name=artist_name.split(splitter)[0].strip(),
+                        album_name=None,
+                        track_version=track_version,
+                    )
         # allow non-exact album match as fallback
         if album_name:
             return await self.get_track_by_name(
