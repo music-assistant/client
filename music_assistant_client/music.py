@@ -6,6 +6,7 @@ import urllib.parse
 from typing import TYPE_CHECKING, cast
 
 from music_assistant_models.enums import AlbumType, ImageType, MediaType
+from music_assistant_models.helpers import create_sort_name
 from music_assistant_models.media_items import (
     Album,
     Artist,
@@ -674,6 +675,82 @@ class Music:
     ) -> None:
         """Mark item as unplayed in playlog."""
         await self.client.send_command("music/mark_unplayed", media_item=media_item)
+
+    async def get_track_by_name(
+        self,
+        track_name: str,
+        artist_name: str | None = None,
+        album_name: str | None = None,
+        track_version: str | None = None,
+    ) -> Track | None:
+        """Get a track by its name, optionally with artist and album."""
+        assert self.client.server_info  # for type checking
+        if self.client.server_info.schema_version >= 27:
+            # from schema version 27+, the server can handle this natively
+            await self.client.send_command(
+                "music/track_by_name",
+                track_name=track_name,
+                artist_name=artist_name,
+                album_name=album_name,
+                track_version=track_version,
+            )
+            return None
+
+        # Fallback implementation for older server versions.
+        # TODO: remove this after a while, once all/most servers are updated
+
+        def compare_strings(str1: str, str2: str) -> bool:
+            str1_compare = create_sort_name(str1)
+            str2_compare = create_sort_name(str2)
+            return str1_compare == str2_compare
+
+        search_query = f"{artist_name} - {track_name}" if artist_name else track_name
+        search_result = await self.client.music.search(
+            search_query=search_query,
+            media_types=[MediaType.TRACK],
+        )
+        for allow_item_mapping in (False, True):
+            for search_track in search_result.tracks:
+                if not allow_item_mapping and not isinstance(search_track, Track):
+                    continue
+                if not compare_strings(track_name, search_track.name):
+                    continue
+                # check optional artist(s)
+                if artist_name and isinstance(search_track, Track):
+                    for artist in search_track.artists:
+                        if compare_strings(artist_name, artist.name):
+                            break
+                    else:
+                        # no artist match found: abort
+                        continue
+                # check optional album
+                if (
+                    album_name
+                    and isinstance(search_track, Track)
+                    and search_track.album
+                    and not compare_strings(album_name, search_track.album.name)
+                ):
+                    # no album match found: abort
+                    continue
+                # if we reach this, we found a match
+                if not isinstance(search_track, Track):
+                    # ensure we return an actual Track object
+                    return await self.client.music.get_track(
+                        item_id=search_track.item_id,
+                        provider_instance_id_or_domain=search_track.provider,
+                    )
+                return search_track
+
+        # allow non-exact album match as fallback
+        if album_name:
+            return await self.get_track_by_name(
+                track_name=track_name,
+                artist_name=artist_name,
+                album_name=None,
+                track_version=track_version,
+            )
+        # no match found
+        return None
 
     # helpers
 

@@ -60,11 +60,14 @@ class PlayerQueues:
             )
         ]
 
-    async def get_active_queue(self, player_id: str) -> PlayerQueue:
+    async def get_active_queue(self, player_id: str) -> PlayerQueue | None:
         """Return the current active/synced queue for a player."""
-        return PlayerQueue.from_dict(
-            await self.client.send_command("player_queues/get_active_queue", player_id=player_id)
+        result = await self.client.send_command(
+            "player_queues/get_active_queue", player_id=player_id
         )
+        if result:
+            return PlayerQueue.from_dict(result)
+        return None
 
     async def queue_command_play(self, queue_id: str) -> None:
         """Send PLAY command to given queue."""
