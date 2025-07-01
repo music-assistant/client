@@ -62,11 +62,15 @@ class PlayerQueues:
 
     async def get_active_queue(self, player_id: str) -> PlayerQueue | None:
         """Return the current active/synced queue for a player."""
-        result = await self.client.send_command(
-            "player_queues/get_active_queue", player_id=player_id
-        )
-        if result:
-            return PlayerQueue.from_dict(result)
+        assert self.client.server_info  # for type checking
+        if self.client.server_info.schema_version >= 27:  # noqa: SIM102
+            # from schema version 27+, the server can handle this natively
+            if result := await self.client.send_command(
+                "player_queues/get_active_queue", player_id=player_id
+            ):
+                return PlayerQueue.from_dict(result)
+        if player := self.client.players.get(player_id):
+            return self.get(player.active_source or player.player_id)
         return None
 
     async def queue_command_play(self, queue_id: str) -> None:
