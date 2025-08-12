@@ -16,7 +16,7 @@ jobs:
     outputs:
       version: ${{ steps.vars.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4.1.4
+      - uses: actions/checkout@v5
       - name: Get tag
         id: vars
         run: >-
