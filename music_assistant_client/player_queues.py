@@ -189,7 +189,7 @@ class PlayerQueues:
     ) -> None:
         """Play item at index (or item_id) X in queue."""
         await self.client.send_command(
-            "player_queues/repeat",
+            "player_queues/play_index",
             queue_id=queue_id,
             index=index,
             seek_position=seek_position,
