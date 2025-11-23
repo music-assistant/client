@@ -9,6 +9,9 @@ import uuid
 from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any, Self
 
+if TYPE_CHECKING:
+    from ssl import SSLContext
+
 from music_assistant_models.api import (
     CommandMessage,
     ErrorResultMessage,
@@ -19,7 +22,11 @@ from music_assistant_models.api import (
     parse_message,
 )
 from music_assistant_models.enums import EventType, ImageType
-from music_assistant_models.errors import ERROR_MAP
+from music_assistant_models.errors import (
+    ERROR_MAP,
+    AuthenticationFailed,
+    AuthenticationRequired,
+)
 from music_assistant_models.event import MassEvent
 from music_assistant_models.provider import ProviderInstance, ProviderManifest
 
@@ -35,7 +42,11 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from aiohttp import ClientSession
-    from music_assistant_models.media_items import ItemMapping, MediaItemImage, MediaItemType
+    from music_assistant_models.media_items import (
+        ItemMapping,
+        MediaItemImage,
+        MediaItemType,
+    )
     from music_assistant_models.queue_item import QueueItem
 
 EventCallBackType = Callable[[MassEvent], Coroutine[Any, Any, None] | None]
@@ -47,10 +58,25 @@ EventSubscriptionType = tuple[
 class MusicAssistantClient:
     """Manage a Music Assistant server remotely."""
 
-    def __init__(self, server_url: str, aiohttp_session: ClientSession | None) -> None:
-        """Initialize the Music Assistant client."""
+    def __init__(
+        self,
+        server_url: str,
+        aiohttp_session: ClientSession | None,
+        token: str | None = None,
+        ssl_context: SSLContext | None = None,
+    ) -> None:
+        """
+        Initialize the Music Assistant client.
+
+        Args:
+            server_url: The URL of the Music Assistant server
+            aiohttp_session: Optional aiohttp session to use
+            token: Optional authentication token (required for schema >= 28)
+            ssl_context: Optional SSL context for HTTPS connections. Use this for
+                custom CA certificates or self-signed certificates.
+        """
         self.server_url = server_url
-        self.connection = WebsocketsConnection(server_url, aiohttp_session)
+        self.connection = WebsocketsConnection(server_url, aiohttp_session, token, ssl_context)
         self.logger = logging.getLogger(__package__)
         self._result_futures: dict[str | int, asyncio.Future[Any]] = {}
         self._subscribers: list[EventSubscriptionType] = []
@@ -210,6 +236,40 @@ class MusicAssistantClient:
             raise InvalidServerVersion(msg)
 
         self._server_info = info
+
+        # Handle authentication for schema >= 28
+        if info.schema_version >= 28:
+            if not self.connection.auth_token:
+                await self.connection.disconnect()
+                msg = (
+                    "Authentication token is required for Music Assistant Server "
+                    f"schema version {info.schema_version}. "
+                    "Please provide a token when initializing the client."
+                )
+                raise AuthenticationRequired(msg)
+
+            # Send authentication command
+            command_message = CommandMessage(
+                message_id=uuid.uuid4().hex,
+                command="auth",
+                args={"token": self.connection.auth_token},
+            )
+            future: asyncio.Future[Any] = self._loop.create_future()
+            self._result_futures[command_message.message_id] = future
+            await self.connection.send_message(command_message.to_dict())
+
+            try:
+                auth_result = await asyncio.wait_for(future, timeout=10)
+                if not auth_result:
+                    await self.connection.disconnect()
+                    msg = "Authentication failed - invalid or expired token"
+                    raise AuthenticationFailed(msg)
+            except TimeoutError as err:
+                await self.connection.disconnect()
+                msg = "Authentication timeout"
+                raise AuthenticationFailed(msg) from err
+            finally:
+                self._result_futures.pop(command_message.message_id, None)
 
         self.logger.info(
             "Connected to Music Assistant Server %s, Version %s, Schema Version %s",
