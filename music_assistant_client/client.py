@@ -22,11 +22,7 @@ from music_assistant_models.api import (
     parse_message,
 )
 from music_assistant_models.enums import EventType, ImageType
-from music_assistant_models.errors import (
-    ERROR_MAP,
-    AuthenticationFailed,
-    AuthenticationRequired,
-)
+from music_assistant_models.errors import ERROR_MAP, AuthenticationFailed, AuthenticationRequired
 from music_assistant_models.event import MassEvent
 from music_assistant_models.provider import ProviderInstance, ProviderManifest
 
@@ -34,6 +30,7 @@ from .config import Config
 from .connection import WebsocketsConnection
 from .constants import API_SCHEMA_VERSION
 from .exceptions import ConnectionClosed, InvalidServerVersion, InvalidState
+from .metadata import Metadata
 from .music import Music
 from .player_queues import PlayerQueues
 from .players import Players
@@ -42,11 +39,7 @@ if TYPE_CHECKING:
     from types import TracebackType
 
     from aiohttp import ClientSession
-    from music_assistant_models.media_items import (
-        ItemMapping,
-        MediaItemImage,
-        MediaItemType,
-    )
+    from music_assistant_models.media_items import ItemMapping, MediaItemImage, MediaItemType
     from music_assistant_models.queue_item import QueueItem
 
 EventCallBackType = Callable[[MassEvent], Coroutine[Any, Any, None] | None]
@@ -86,6 +79,7 @@ class MusicAssistantClient:
         self._players = Players(self)
         self._player_queues = PlayerQueues(self)
         self._music = Music(self)
+        self._metadata = Metadata(self)
         # below items are retrieved after connect
         self._server_info: ServerInfoMessage | None = None
         self._provider_manifests: dict[str, ProviderManifest] = {}
@@ -125,6 +119,11 @@ class MusicAssistantClient:
     def music(self) -> Music:
         """Return Music handler."""
         return self._music
+
+    @property
+    def metadata(self) -> Metadata:
+        """Return Metadata handler."""
+        return self._metadata
 
     def get_provider_manifest(self, domain: str) -> ProviderManifest:
         """Return Provider manifests of single provider(domain)."""
