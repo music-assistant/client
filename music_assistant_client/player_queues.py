@@ -222,6 +222,21 @@ class PlayerQueues:
             require_schema=25,
         )
 
+    async def dont_stop_the_music(self, queue_id: str, dont_stop_the_music_enabled: bool) -> None:
+        """Configure Don't stop the music setting on the queue."""
+        await self.client.send_command(
+            "player_queues/dont_stop_the_music",
+            queue_id=queue_id,
+            dont_stop_the_music_enabled=dont_stop_the_music_enabled,
+        )
+
+    async def play_pause(self, queue_id: str) -> None:
+        """Toggle play/pause on given playerqueue."""
+        await self.client.send_command(
+            "player_queues/play_pause",
+            queue_id=queue_id,
+        )
+
     async def _get_player_queues(self) -> list[PlayerQueue]:
         """Fetch all PlayerQueues from the server."""
         return [

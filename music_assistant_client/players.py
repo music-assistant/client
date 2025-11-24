@@ -11,7 +11,8 @@ from music_assistant_models.errors import (
     PlayerCommandFailed,
     PlayerUnavailableError,
 )
-from music_assistant_models.player import Player
+from music_assistant_models.player import Player, PlayerMedia, PlayerSource
+from music_assistant_models.player_control import PlayerControl
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -275,7 +276,110 @@ class Players:
         # if we reach here, we could not resolve the currently playing item
         raise PlayerCommandFailed("No current item to add to favorites")
 
-    # Other endpoints/commands
+    async def resume(
+        self,
+        player_id: str,
+        source: str | None = None,
+        media: PlayerMedia | None = None,
+    ) -> None:
+        """Send RESUME command to given player. Resume (or restart) playback on the player."""
+        await self.client.send_command(
+            "players/cmd/resume",
+            player_id=player_id,
+            source=source,
+            media=media,
+        )
+
+    async def set_members(
+        self,
+        target_player: str,
+        player_ids_to_add: list[str] | None = None,
+        player_ids_to_remove: list[str] | None = None,
+    ) -> None:
+        """Join/unjoin given player(s) to/from target player."""
+        await self.client.send_command(
+            "players/cmd/set_members",
+            target_player=target_player,
+            player_ids_to_add=player_ids_to_add,
+            player_ids_to_remove=player_ids_to_remove,
+        )
+
+    async def create_group_player(
+        self,
+        provider: str,
+        name: str,
+        members: list[str],
+        dynamic: bool | None = None,
+    ) -> Player:
+        """Create a new (permanent) Group Player."""
+        return Player.from_dict(
+            await self.client.send_command(
+                "players/create_group_player",
+                provider=provider,
+                name=name,
+                members=members,
+                dynamic=dynamic,
+            )
+        )
+
+    async def get_by_name(self, name: str) -> Player:
+        """Return PlayerState by name."""
+        return Player.from_dict(
+            await self.client.send_command(
+                "players/get_by_name",
+                name=name,
+            )
+        )
+
+    async def player_control(self, control_id: str) -> PlayerControl:
+        """Return PlayerControl by control_id."""
+        return PlayerControl.from_dict(
+            await self.client.send_command(
+                "players/player_control",
+                control_id=control_id,
+            )
+        )
+
+    async def player_controls(self) -> list[PlayerControl]:
+        """Return all registered playercontrols."""
+        return [
+            PlayerControl.from_dict(item)
+            for item in await self.client.send_command(
+                "players/player_controls",
+            )
+        ]
+
+    async def plugin_source(self, source_id: str) -> PlayerSource:
+        """Return PluginSource by source_id."""
+        return PlayerSource.from_dict(
+            await self.client.send_command(
+                "players/plugin_source",
+                source_id=source_id,
+            )
+        )
+
+    async def plugin_sources(self) -> list[PlayerSource]:
+        """Return all available plugin sources."""
+        return [
+            PlayerSource.from_dict(item)
+            for item in await self.client.send_command(
+                "players/plugin_sources",
+            )
+        ]
+
+    async def remove(self, player_id: str) -> None:
+        """Remove a player from a provider."""
+        await self.client.send_command(
+            "players/remove",
+            player_id=player_id,
+        )
+
+    async def remove_group_player(self, player_id: str) -> None:
+        """Remove a group player."""
+        await self.client.send_command(
+            "players/remove_group_player",
+            player_id=player_id,
+        )
 
     async def _get_players(self) -> list[Player]:
         """Fetch all Players from the server."""

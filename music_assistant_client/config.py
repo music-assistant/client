@@ -11,6 +11,7 @@ from music_assistant_models.config_entries import (
     PlayerConfig,
     ProviderConfig,
 )
+from music_assistant_models.dsp import DSPConfig, DSPConfigPreset
 
 if TYPE_CHECKING:
     from music_assistant_models.enums import ProviderType
@@ -202,7 +203,7 @@ class Config:
         domain: str,
         action: str | None = None,
         values: dict[str, ConfigValueType] | None = None,
-    ) -> tuple[ConfigEntry, ...]:
+    ) -> list[ConfigEntry]:
         """
         Return Config entries to configure a core controller.
 
@@ -210,7 +211,7 @@ class Config:
         action: [optional] action key called from config entries UI.
         values: the (intermediate) raw values for config entries sent with the action.
         """
-        return tuple(
+        return [
             ConfigEntry.from_dict(x)
             for x in await self.client.send_command(
                 "config/core/get_entries",
@@ -218,7 +219,7 @@ class Config:
                 action=action,
                 values=values,
             )
-        )
+        ]
 
     async def save_core_config(
         self,
@@ -228,8 +229,69 @@ class Config:
         """Save CoreController Config values."""
         return CoreConfig.from_dict(
             await self.client.send_command(
-                "config/core/get_entries",
+                "config/core/save",
                 domain=domain,
                 values=values,
             )
         )
+
+    async def get_dsp_preset(self) -> list[DSPConfigPreset]:
+        """Return all user-defined DSP presets."""
+        return [
+            DSPConfigPreset.from_dict(obj)
+            for obj in await self.client.send_command(
+                "config/dsp_presets/get",
+            )
+        ]
+
+    async def remove_dsp_preset(self, preset_id: str) -> None:
+        """Remove a user-defined DSP preset."""
+        await self.client.send_command(
+            "config/dsp_presets/remove",
+            preset_id=preset_id,
+        )
+
+    async def save_dsp_preset(self, preset: DSPConfigPreset) -> DSPConfigPreset:
+        """Save/update a user-defined DSP preset."""
+        return DSPConfigPreset.from_dict(
+            await self.client.send_command(
+                "config/dsp_presets/save",
+                preset=preset,
+            )
+        )
+
+    async def get_player_dsp_config(self, player_id: str) -> DSPConfig:
+        """Return the DSP Configuration for a player."""
+        return DSPConfig.from_dict(
+            await self.client.send_command(
+                "config/players/dsp/get",
+                player_id=player_id,
+            )
+        )
+
+    async def save_player_dsp_config(self, player_id: str, config: DSPConfig) -> DSPConfig:
+        """Save/update DSPConfig for a player."""
+        return DSPConfig.from_dict(
+            await self.client.send_command(
+                "config/players/dsp/save",
+                player_id=player_id,
+                config=config,
+            )
+        )
+
+    async def get_player_config_entries(
+        self,
+        player_id: str,
+        action: str | None = None,
+        values: dict[str, ConfigValueType] | None = None,
+    ) -> list[ConfigEntry]:
+        """Return Config entries to configure a player."""
+        return [
+            ConfigEntry.from_dict(x)
+            for x in await self.client.send_command(
+                "config/players/get_entries",
+                player_id=player_id,
+                action=action,
+                values=values,
+            )
+        ]
