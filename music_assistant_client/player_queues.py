@@ -39,17 +39,11 @@ class PlayerQueues:
         """Return all player queues."""
         return list(self._queues.values())
 
-    def __iter__(self) -> Iterator[PlayerQueue]:
-        """Iterate over (available) PlayerQueues."""
-        return iter(self._queues.values())
-
     def get(self, queue_id: str) -> PlayerQueue | None:
         """Return PlayerQueue by ID (or None if not found)."""
         return self._queues.get(queue_id)
 
-    #  PlayerQueue related endpoints/commands
-
-    async def get_player_queue_items(
+    async def get_queue_items(
         self, queue_id: str, limit: int = 500, offset: int = 0
     ) -> list[QueueItem]:
         """Get all QueueItems for given PlayerQueue."""
@@ -73,40 +67,38 @@ class PlayerQueues:
             return self.get(player.active_source or player.player_id)
         return None
 
-    async def queue_command_play(self, queue_id: str) -> None:
+    async def play(self, queue_id: str) -> None:
         """Send PLAY command to given queue."""
         await self.client.send_command("player_queues/play", queue_id=queue_id)
 
-    async def queue_command_pause(self, queue_id: str) -> None:
+    async def pause(self, queue_id: str) -> None:
         """Send PAUSE command to given queue."""
         await self.client.send_command("player_queues/pause", queue_id=queue_id)
 
-    async def queue_command_stop(self, queue_id: str) -> None:
+    async def stop(self, queue_id: str) -> None:
         """Send STOP command to given queue."""
         await self.client.send_command("player_queues/stop", queue_id=queue_id)
 
-    async def queue_command_resume(self, queue_id: str, fade_in: bool | None = None) -> None:
+    async def resume(self, queue_id: str, fade_in: bool | None = None) -> None:
         """Handle RESUME command for given queue.
 
         - queue_id: queue_id of the queue to handle the command.
         """
         await self.client.send_command("player_queues/resume", queue_id=queue_id, fade_in=fade_in)
 
-    async def queue_command_next(self, queue_id: str) -> None:
+    async def next(self, queue_id: str) -> None:
         """Send NEXT TRACK command to given queue."""
         await self.client.send_command("player_queues/next", queue_id=queue_id)
 
-    async def queue_command_previous(self, queue_id: str) -> None:
+    async def previous(self, queue_id: str) -> None:
         """Send PREVIOUS TRACK command to given queue."""
         await self.client.send_command("player_queues/previous", queue_id=queue_id)
 
-    async def queue_command_clear(self, queue_id: str) -> None:
+    async def clear(self, queue_id: str) -> None:
         """Send CLEAR QUEUE command to given queue."""
         await self.client.send_command("player_queues/clear", queue_id=queue_id)
 
-    async def queue_command_move_item(
-        self, queue_id: str, queue_item_id: str, pos_shift: int = 1
-    ) -> None:
+    async def move_item(self, queue_id: str, queue_item_id: str, pos_shift: int = 1) -> None:
         """
         Move queue item x up/down the queue.
 
@@ -126,31 +118,25 @@ class PlayerQueues:
             pos_shift=pos_shift,
         )
 
-    async def queue_command_move_up(self, queue_id: str, queue_item_id: str) -> None:
+    async def move_up(self, queue_id: str, queue_item_id: str) -> None:
         """Move given queue item one place up in the queue."""
-        await self.queue_command_move_item(
-            queue_id=queue_id, queue_item_id=queue_item_id, pos_shift=-1
-        )
+        await self.move_item(queue_id=queue_id, queue_item_id=queue_item_id, pos_shift=-1)
 
-    async def queue_command_move_down(self, queue_id: str, queue_item_id: str) -> None:
+    async def move_down(self, queue_id: str, queue_item_id: str) -> None:
         """Move given queue item one place down in the queue."""
-        await self.queue_command_move_item(
-            queue_id=queue_id, queue_item_id=queue_item_id, pos_shift=1
-        )
+        await self.move_item(queue_id=queue_id, queue_item_id=queue_item_id, pos_shift=1)
 
-    async def queue_command_move_next(self, queue_id: str, queue_item_id: str) -> None:
+    async def move_next(self, queue_id: str, queue_item_id: str) -> None:
         """Move given queue item as next up in the queue."""
-        await self.queue_command_move_item(
-            queue_id=queue_id, queue_item_id=queue_item_id, pos_shift=0
-        )
+        await self.move_item(queue_id=queue_id, queue_item_id=queue_item_id, pos_shift=0)
 
-    async def queue_command_delete(self, queue_id: str, item_id_or_index: int | str) -> None:
+    async def delete_item(self, queue_id: str, item_id_or_index: int | str) -> None:
         """Delete item (by id or index) from the queue."""
         await self.client.send_command(
             "player_queues/delete_item", queue_id=queue_id, item_id_or_index=item_id_or_index
         )
 
-    async def queue_command_seek(self, queue_id: str, position: int) -> None:
+    async def seek(self, queue_id: str, position: int) -> None:
         """
         Handle SEEK command for given queue.
 
@@ -159,7 +145,7 @@ class PlayerQueues:
         """
         await self.client.send_command("player_queues/seek", queue_id=queue_id, position=position)
 
-    async def queue_command_skip(self, queue_id: str, seconds: int) -> None:
+    async def skip(self, queue_id: str, seconds: int) -> None:
         """
         Handle SKIP command for given queue.
 
@@ -168,13 +154,13 @@ class PlayerQueues:
         """
         await self.client.send_command("player_queues/skip", queue_id=queue_id, seconds=seconds)
 
-    async def queue_command_shuffle(self, queue_id: str, shuffle_enabled: bool) -> None:
+    async def shuffle(self, queue_id: str, shuffle_enabled: bool) -> None:
         """Configure shuffle mode on the the queue."""
         await self.client.send_command(
             "player_queues/shuffle", queue_id=queue_id, shuffle_enabled=shuffle_enabled
         )
 
-    async def queue_command_repeat(self, queue_id: str, repeat_mode: RepeatMode) -> None:
+    async def repeat(self, queue_id: str, repeat_mode: RepeatMode) -> None:
         """Configure repeat mode on the the queue."""
         await self.client.send_command(
             "player_queues/repeat", queue_id=queue_id, repeat_mode=repeat_mode
@@ -221,7 +207,7 @@ class PlayerQueues:
             start_item=start_item,
         )
 
-    async def transfer_queue(
+    async def transfer(
         self,
         source_queue_id: str,
         target_queue_id: str,
@@ -235,8 +221,6 @@ class PlayerQueues:
             auto_play=auto_play,
             require_schema=25,
         )
-
-    # Other endpoints/commands
 
     async def _get_player_queues(self) -> list[PlayerQueue]:
         """Fetch all PlayerQueues from the server."""
@@ -256,3 +240,27 @@ class PlayerQueues:
             # Queue events always have an object_id
             assert event.object_id
             self._queues[event.object_id] = PlayerQueue.from_dict(event.data)
+
+    def __iter__(self) -> Iterator[PlayerQueue]:
+        """Iterate over (available) PlayerQueues."""
+        return iter(self._queues.values())
+
+    # Backward compatibility aliases (deprecated)
+    queue_command_play = play
+    queue_command_pause = pause
+    queue_command_stop = stop
+    queue_command_resume = resume
+    queue_command_next = next
+    queue_command_previous = previous
+    queue_command_clear = clear
+    queue_command_move_item = move_item
+    queue_command_move_up = move_up
+    queue_command_move_down = move_down
+    queue_command_move_next = move_next
+    queue_command_delete = delete_item
+    queue_command_seek = seek
+    queue_command_skip = skip
+    queue_command_shuffle = shuffle
+    queue_command_repeat = repeat
+    transfer_queue = transfer
+    get_player_get_queue_items = get_queue_items

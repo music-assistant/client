@@ -58,45 +58,45 @@ class Players:
 
     #  Player related endpoints/commands
 
-    async def player_command_stop(self, player_id: str) -> None:
+    async def stop(self, player_id: str) -> None:
         """Send STOP command to given player (directly)."""
         await self.client.send_command("players/cmd/stop", player_id=player_id)
 
-    async def player_command_play(self, player_id: str) -> None:
+    async def play(self, player_id: str) -> None:
         """Send PLAY command to given player (directly)."""
         await self.client.send_command("players/cmd/play", player_id=player_id)
 
-    async def player_command_pause(self, player_id: str) -> None:
+    async def pause(self, player_id: str) -> None:
         """Send PAUSE command to given player (directly)."""
         await self.client.send_command("players/cmd/pause", player_id=player_id)
 
-    async def player_command_play_pause(self, player_id: str) -> None:
+    async def play_pause(self, player_id: str) -> None:
         """Send PLAY_PAUSE (toggle) command to given player (directly)."""
         await self.client.send_command("players/cmd/pause", player_id=player_id)
 
-    async def player_command_power(self, player_id: str, powered: bool) -> None:
+    async def power(self, player_id: str, powered: bool) -> None:
         """Send POWER command to given player."""
         await self.client.send_command("players/cmd/power", player_id=player_id, powered=powered)
 
-    async def player_command_volume_set(self, player_id: str, volume_level: int) -> None:
+    async def volume_set(self, player_id: str, volume_level: int) -> None:
         """Send VOLUME SET command to given player."""
         await self.client.send_command(
             "players/cmd/volume_set", player_id=player_id, volume_level=volume_level
         )
 
-    async def player_command_volume_up(self, player_id: str) -> None:
+    async def volume_up(self, player_id: str) -> None:
         """Send VOLUME UP command to given player."""
         await self.client.send_command("players/cmd/volume_up", player_id=player_id)
 
-    async def player_command_volume_down(self, player_id: str) -> None:
+    async def volume_down(self, player_id: str) -> None:
         """Send VOLUME DOWN command to given player."""
         await self.client.send_command("players/cmd/volume_down", player_id=player_id)
 
-    async def player_command_volume_mute(self, player_id: str, muted: bool) -> None:
+    async def volume_mute(self, player_id: str, muted: bool) -> None:
         """Send VOLUME MUTE command to given player."""
         await self.client.send_command("players/cmd/volume_mute", player_id=player_id, muted=muted)
 
-    async def player_command_seek(self, player_id: str, position: int) -> None:
+    async def seek(self, player_id: str, position: int) -> None:
         """Handle SEEK command for given player (directly).
 
         - player_id: player_id of the player to handle the command.
@@ -104,15 +104,15 @@ class Players:
         """
         await self.client.send_command("players/cmd/seek", player_id=player_id, position=position)
 
-    async def player_command_next_track(self, player_id: str) -> None:
+    async def next_track(self, player_id: str) -> None:
         """Handle NEXT TRACK command for given player."""
         await self.client.send_command("players/cmd/next", player_id=player_id)
 
-    async def player_command_previous_track(self, player_id: str) -> None:
+    async def previous_track(self, player_id: str) -> None:
         """Handle PREVIOUS TRACK command for given player."""
         await self.client.send_command("players/cmd/previous", player_id=player_id)
 
-    async def player_command_select_source(self, player_id: str, source: str) -> None:
+    async def select_source(self, player_id: str, source: str) -> None:
         """
         Handle SELECT SOURCE command on given player.
 
@@ -123,7 +123,7 @@ class Players:
             "players/cmd/select_source", player_id=player_id, source=source
         )
 
-    async def player_command_group(self, player_id: str, target_player: str) -> None:
+    async def group(self, player_id: str, target_player: str) -> None:
         """Handle GROUP command for given player.
 
         Join/add the given player(id) to the given (leader) player/sync group.
@@ -137,7 +137,7 @@ class Players:
             "players/cmd/group", player_id=player_id, target_player=target_player
         )
 
-    async def player_command_ungroup(self, player_id: str) -> None:
+    async def ungroup(self, player_id: str) -> None:
         """Handle UNGROUP command for given player.
 
         Remove the given player from any (sync)groups it currently is synced to.
@@ -148,15 +148,13 @@ class Players:
         """
         await self.client.send_command("players/cmd/ungroup", player_id=player_id)
 
-    async def player_command_group_many(
-        self, target_player: str, child_player_ids: list[str]
-    ) -> None:
+    async def group_many(self, target_player: str, child_player_ids: list[str]) -> None:
         """Join given player(s) to target player."""
         await self.client.send_command(
             "players/cmd/group_many", target_player=target_player, child_player_ids=child_player_ids
         )
 
-    async def player_command_ungroup_many(self, player_ids: list[str]) -> None:
+    async def ungroup_many(self, player_ids: list[str]) -> None:
         """Handle UNGROUP command for all the given players."""
         await self.client.send_command("players/cmd/ungroup_many", player_ids=player_ids)
 
@@ -178,7 +176,7 @@ class Players:
 
     #  PlayerGroup related endpoints/commands
 
-    async def set_player_group_volume(self, player_id: str, volume_level: int) -> None:
+    async def group_volume(self, player_id: str, volume_level: int) -> None:
         """
         Send VOLUME_SET command to given playergroup.
 
@@ -190,11 +188,11 @@ class Players:
             "players/cmd/group_volume", player_id=player_id, volume_level=volume_level
         )
 
-    async def player_command_group_volume_up(self, player_id: str) -> None:
+    async def group_volume_up(self, player_id: str) -> None:
         """Send VOLUME_UP command to given playergroup."""
         await self.client.send_command("players/cmd/group_volume_up", player_id=player_id)
 
-    async def player_command_group_volume_down(self, player_id: str) -> None:
+    async def group_volume_down(self, player_id: str) -> None:
         """Send VOLUME_DOWN command to given playergroup."""
         await self.client.send_command("players/cmd/group_volume_down", player_id=player_id)
 
@@ -299,3 +297,25 @@ class Players:
             # Player events always have an object id
             assert event.object_id
             self._players.pop(event.object_id, None)
+
+    # Backward compatibility aliases (deprecated)
+    player_command_stop = stop
+    player_command_play = play
+    player_command_pause = pause
+    player_command_play_pause = play_pause
+    player_command_power = power
+    player_command_volume_set = volume_set
+    player_command_volume_up = volume_up
+    player_command_volume_down = volume_down
+    player_command_volume_mute = volume_mute
+    player_command_seek = seek
+    player_command_next_track = next_track
+    player_command_previous_track = previous_track
+    player_command_select_source = select_source
+    player_command_group = group
+    player_command_ungroup = ungroup
+    player_command_group_many = group_many
+    player_command_ungroup_many = ungroup_many
+    set_player_group_volume = group_volume
+    player_command_group_volume_up = group_volume_up
+    player_command_group_volume_down = group_volume_down
