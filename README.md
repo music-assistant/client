@@ -1,6 +1,6 @@
 # Music Assistant Client
 
-Python client to interact with the Music Assistant Server API
+Python client to interact with the [Music Assistant Server](https://github.com/music-assistant/server) API
 
 ---
 
@@ -82,10 +82,6 @@ async with MusicAssistantClient("http://your-server:8095", None, token=token) as
     await client.start_listening()
 ```
 
-### 4. Home Assistant Add-on
-
-When Music Assistant runs as a Home Assistant add-on, it provides a special internal webserver (port 8094) for the Home Assistant integration. This server automatically authenticates users based on Home Assistant's `X-Remote-User-*` headers and is only accessible on the internal network (172.30.32.x). The HA integration simply connects to this internal address without needing a token - authentication is handled automatically via socket-level verification.
-
 ## Backward Compatibility
 
 The client automatically detects the server schema version and only requires authentication for schema version 28 and above. Connections to older servers (schema < 28) will continue to work without authentication.
@@ -110,6 +106,7 @@ async with MusicAssistantClient("https://music.local", None, token=token, ssl_co
 ```
 
 All authentication helper functions also accept an optional `ssl_context` parameter.
+You can also simply pass in a aiohttp Client with the ssl context already set.
 
 ## API Reference
 
@@ -139,7 +136,7 @@ All authentication functions support an optional `ssl_context` parameter for HTT
 
 **`MusicAssistantClient(server_url, aiohttp_session=None, token=None, ssl_context=None)`**
 
-- `server_url`: The URL of the Music Assistant server (e.g., `http://localhost:8095` or `https://music.example.com`)
+- `server_url`: The URL of the Music Assistant server (e.g., `http://mass.local:8095` or `https://music.example.com`)
 - `aiohttp_session`: Optional aiohttp ClientSession to use
 - `token`: Optional authentication token (required for schema >= 28)
 - `ssl_context`: Optional SSL context for HTTPS connections (for custom CAs or self-signed certificates)
