@@ -20,12 +20,11 @@ class Metadata:
         self.client = client
 
     async def set_default_preferred_language(self, lang: str) -> None:
-        """Set the (default) preferred language.
+        """
+        Set the (default) preferred language.
 
         Reasoning behind this is that the backend can not make a wise choice for the default,
-
         so relies on some external source that knows better to set this info, like the frontend
-
         or a streaming provider.
 
         Can only be set once (by this call or the user).
