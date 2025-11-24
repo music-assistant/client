@@ -71,7 +71,7 @@ class Music:
         """Get single Track from the server."""
         return Track.from_dict(
             await self.client.send_command(
-                "music/tracks/get_track",
+                "music/tracks/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
                 album_uri=album_uri,
@@ -153,7 +153,7 @@ class Music:
         """Get single Album from the server."""
         return Album.from_dict(
             await self.client.send_command(
-                "music/albums/get_album",
+                "music/albums/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
             ),
@@ -224,7 +224,7 @@ class Music:
         """Get single Artist from the server."""
         return Artist.from_dict(
             await self.client.send_command(
-                "music/artists/get_artist",
+                "music/artists/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
             ),
@@ -295,7 +295,7 @@ class Music:
         """Get single Playlist from the server."""
         return Playlist.from_dict(
             await self.client.send_command(
-                "music/playlists/get_playlist",
+                "music/playlists/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
             ),
@@ -379,7 +379,7 @@ class Music:
         """Get single Audiobook from the server."""
         return Audiobook.from_dict(
             await self.client.send_command(
-                "music/audiobooks/get_audiobook",
+                "music/audiobooks/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
             ),
@@ -416,7 +416,7 @@ class Music:
         """Get single Podcast from the server."""
         return Podcast.from_dict(
             await self.client.send_command(
-                "music/podcasts/get_podcast",
+                "music/podcasts/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
             ),
@@ -468,7 +468,7 @@ class Music:
         """Get single Radio from the server."""
         return Radio.from_dict(
             await self.client.send_command(
-                "music/radios/get_radio",
+                "music/radios/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
             ),
