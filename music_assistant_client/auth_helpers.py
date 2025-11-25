@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 import aiohttp
+from music_assistant_models.api import ServerInfoMessage
 from music_assistant_models.auth import User
 from music_assistant_models.errors import LoginFailed
 
@@ -161,3 +162,54 @@ async def create_long_lived_token(
         long_lived_token = await client.auth.create_token(token_name)
         LOGGER.info("Successfully created long-lived token: %s", token_name)
         return long_lived_token
+
+
+async def get_server_info(
+    server_url: str,
+    aiohttp_session: ClientSession | None = None,
+    ssl_context: SSLContext | None = None,
+) -> ServerInfoMessage:
+    """
+    Get server information from the /info endpoint.
+
+    This endpoint does not require authentication and can be used to check
+    server availability and get basic server information like version and schema.
+
+    Args:
+        server_url: The base URL of the Music Assistant server
+        aiohttp_session: Optional aiohttp session to use
+        ssl_context: Optional SSL context for HTTPS connections
+
+    Returns:
+        ServerInfoMessage with server details
+
+    Raises:
+        CannotConnect: If unable to connect to server
+    """
+    # Ensure we have a session
+    session_provided = aiohttp_session is not None
+    if aiohttp_session:
+        session = aiohttp_session
+    else:
+        # Create session with SSL context if provided
+        connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
+        session = aiohttp.ClientSession(connector=connector)
+
+    # Normalize server URL
+    if not server_url.endswith("/"):
+        server_url = f"{server_url}/"
+
+    try:
+        async with session.get(f"{server_url}info") as response:
+            if response.status != 200:
+                msg = f"Failed to get server info with status {response.status}"
+                raise CannotConnect(Exception(msg))
+
+            data = await response.json()
+            return ServerInfoMessage.from_dict(data)
+
+    except aiohttp.ClientError as err:
+        raise CannotConnect(err) from err
+    finally:
+        if not session_provided:
+            await session.close()
