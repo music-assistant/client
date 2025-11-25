@@ -60,6 +60,7 @@ Update the Python client controller files to match the current server API:
 ### Step 2: Process Each Controller
 
 Process these controller files in the client:
+- \`music_assistant_client/auth.py\` - handles \"Auth\" category
 - \`music_assistant_client/config.py\` - handles \"Config\" category
 - \`music_assistant_client/metadata.py\` - handles \"Metadata\" category
 - \`music_assistant_client/music.py\` - handles \"Music\" category
@@ -67,7 +68,6 @@ Process these controller files in the client:
 - \`music_assistant_client/players.py\` - handles \"Players\" category
 
 **Skip these API categories entirely:**
-- Auth (handled separately with special authentication logic)
 - Logging
 - Builtin Player
 - General (already handled in main client logic)

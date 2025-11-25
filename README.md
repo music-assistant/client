@@ -18,7 +18,9 @@ Starting with Music Assistant Server schema version 28, authentication is requir
 
 ### 1. Using a Long-Lived Token (Recommended)
 
-The recommended approach is to use a long-lived token. You can obtain one using the `login_with_token()` helper:
+The recommended approach is to use a long-lived token.
+You can create Long Lived tokens in the Music Assistant web interface in your profile settings.
+You can also obtain one using the `login_with_token()` helper:
 
 ```python
 from music_assistant_client import login_with_token, MusicAssistantClient
@@ -44,7 +46,7 @@ async with MusicAssistantClient("http://your-server:8095", None, token=token) as
 You can also manually manage the authentication process:
 
 ```python
-from music_assistant_client import login, create_long_lived_token, MusicAssistantClient
+from music_assistant_client import login, MusicAssistantClient
 
 # Step 1: Login to get an access token
 user, access_token = await login(
@@ -53,14 +55,11 @@ user, access_token = await login(
     "your_password"
 )
 
-# Step 2: Create a long-lived token
-long_lived_token = await create_long_lived_token(
-    "http://your-server:8095",
-    access_token,
-    token_name="My Application"
-)
+# Step 2: Connect with the access token and create a long-lived token
+async with MusicAssistantClient("http://your-server:8095", None, token=access_token) as client:
+    long_lived_token = await client.auth.create_token(name="My Application")
 
-# Step 3: Use the long-lived token
+# Step 3: Use the long-lived token for future connections
 async with MusicAssistantClient("http://your-server:8095", None, token=long_lived_token) as client:
     await client.start_listening()
 ```
@@ -84,7 +83,8 @@ async with MusicAssistantClient("http://your-server:8095", None, token=token) as
 
 ## Backward Compatibility
 
-The client automatically detects the server schema version and only requires authentication for schema version 28 and above. Connections to older servers (schema < 28) will continue to work without authentication.
+The client automatically detects the server schema version and only requires authentication for schema version 28 and above.
+Connections to older servers (schema < 28) will continue to work without authentication.
 
 ## SSL/TLS Support
 
@@ -110,28 +110,6 @@ You can also simply pass in a aiohttp Client with the ssl context already set.
 
 ## API Reference
 
-### Authentication Functions
-
-All authentication functions support an optional `ssl_context` parameter for HTTPS connections.
-
-- **`login(server_url, username, password, aiohttp_session=None, ssl_context=None)`**
-  Login to the server and get a short-lived access token.
-
-- **`login_with_token(server_url, username, password, token_name="Music Assistant Client", aiohttp_session=None, ssl_context=None)`**
-  Login and immediately create a long-lived token. Returns `(User, token)`.
-
-- **`create_long_lived_token(server_url, access_token, token_name, aiohttp_session=None, ssl_context=None)`**
-  Create a long-lived token using an existing access token.
-
-- **`get_current_user(server_url, access_token, aiohttp_session=None, ssl_context=None)`**
-  Get information about the currently authenticated user.
-
-- **`list_tokens(server_url, access_token, aiohttp_session=None, ssl_context=None)`**
-  List all tokens for the current user.
-
-- **`revoke_token(server_url, access_token, token_id, aiohttp_session=None, ssl_context=None)`**
-  Revoke a specific token.
-
 ### Client Class
 
 **`MusicAssistantClient(server_url, aiohttp_session=None, token=None, ssl_context=None)`**
@@ -145,6 +123,7 @@ All authentication functions support an optional `ssl_context` parameter for HTT
 
 The client provides several controllers for interacting with different aspects of the server:
 
+- **`client.auth`** - Authentication and user management
 - **`client.music`** - Music library operations (browse, search, get tracks/albums/artists/playlists, etc.)
 - **`client.players`** - Player control and information
 - **`client.player_queues`** - Queue management for players
