@@ -1,363 +1,156 @@
-"""Authentication helpers for Music Assistant Client."""
+"""Handle Auth related endpoints for Music Assistant."""
 
 from __future__ import annotations
 
-import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-import aiohttp
-from music_assistant_models.auth import AuthToken, User
-from music_assistant_models.errors import AuthenticationFailed, LoginFailed
-
-from .exceptions import CannotConnect
+from music_assistant_models.auth import AuthToken, User, UserAuthProvider
 
 if TYPE_CHECKING:
-    from ssl import SSLContext
-
-    from aiohttp import ClientSession
-
-LOGGER = logging.getLogger(__name__)
+    from .client import MusicAssistantClient
 
 
-async def login(
-    server_url: str,
-    username: str,
-    password: str,
-    aiohttp_session: ClientSession | None = None,
-    ssl_context: SSLContext | None = None,
-) -> tuple[User, str]:
-    """
-    Log in to a Music Assistant server with username and password.
+class Auth:
+    """Auth related endpoints/data for Music Assistant."""
 
-    Args:
-        server_url: The base URL of the Music Assistant server
-        username: The username to authenticate with
-        password: The password to authenticate with
-        aiohttp_session: Optional aiohttp session to use
-        ssl_context: Optional SSL context for HTTPS connections
+    def __init__(self, client: MusicAssistantClient) -> None:
+        """Handle Initialization."""
+        self.client = client
 
-    Returns:
-        A tuple of (User, access_token)
+    async def get_current_user(self) -> User:
+        """Get current authenticated user information."""
+        return User.from_dict(await self.client.send_command("auth/me"))
 
-    Raises:
-        LoginFailed: If authentication fails
-        CannotConnect: If unable to connect to server
-    """
-    # Ensure we have a session
-    session_provided = aiohttp_session is not None
-    if aiohttp_session:
-        session = aiohttp_session
-    else:
-        # Create session with SSL context if provided
-        connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
-        session = aiohttp.ClientSession(connector=connector)
+    async def create_token(self, name: str, user_id: str | None = None) -> str:
+        """
+        Create a new long-lived access token.
 
-    # Normalize server URL
-    if not server_url.endswith("/"):
-        server_url = f"{server_url}/"
+        Args:
+            name: A friendly name for the token
+            user_id: Optional user ID to create token for (admin only)
 
-    try:
-        # Send login request
-        async with session.post(
-            f"{server_url}auth/login",
-            json={"username": username, "password": password},
-        ) as response:
-            if response.status == 401:
-                msg = "Invalid username or password"
-                raise LoginFailed(msg)
+        Returns:
+            The token string
+        """
+        result: str = await self.client.send_command(
+            "auth/token/create", name=name, user_id=user_id
+        )
+        return result
 
-            if response.status != 200:
-                msg = f"Login failed with status {response.status}"
-                raise CannotConnect(Exception(msg))
+    async def revoke_token(self, token_id: str) -> None:
+        """Revoke an auth token."""
+        await self.client.send_command("auth/token/revoke", token_id=token_id)
 
-            data = await response.json()
-            user = User.from_dict(data["user"])
-            access_token = data["access_token"]
+    async def get_tokens(self, user_id: str | None = None) -> list[AuthToken]:
+        """
+        Get auth tokens for current user or another user (admin only).
 
-            LOGGER.info("Successfully logged in as %s", username)
-            return user, access_token
+        Args:
+            user_id: Optional user ID to get tokens for (admin only)
 
-    except aiohttp.ClientError as err:
-        raise CannotConnect(err) from err
-    finally:
-        if not session_provided:
-            await session.close()
+        Returns:
+            List of AuthToken objects
+        """
+        return [
+            AuthToken.from_dict(token)
+            for token in await self.client.send_command("auth/tokens", user_id=user_id)
+        ]
 
+    async def get_user(self, user_id: str) -> User | None:
+        """Get user by ID (admin only)."""
+        result = await self.client.send_command("auth/user", user_id=user_id)
+        return User.from_dict(result) if result else None
 
-async def create_long_lived_token(
-    server_url: str,
-    access_token: str,
-    token_name: str,
-    aiohttp_session: ClientSession | None = None,
-    ssl_context: SSLContext | None = None,
-) -> str:
-    """
-    Create a long-lived token using an existing access token.
+    async def list_users(self) -> list[User]:
+        """Get all users (admin only)."""
+        return [User.from_dict(user) for user in await self.client.send_command("auth/users")]
 
-    Args:
-        server_url: The base URL of the Music Assistant server
-        access_token: The access token from a previous login
-        token_name: A friendly name for the token
-        aiohttp_session: Optional aiohttp session to use
-        ssl_context: Optional SSL context for HTTPS connections
+    async def create_user(
+        self,
+        username: str,
+        password: str,
+        role: str = "user",
+        display_name: str | None = None,
+        avatar_url: str | None = None,
+    ) -> User:
+        """Create a new user with built-in authentication (admin only)."""
+        return User.from_dict(
+            await self.client.send_command(
+                "auth/user/create",
+                username=username,
+                password=password,
+                role=role,
+                display_name=display_name,
+                avatar_url=avatar_url,
+            )
+        )
 
-    Returns:
-        The long-lived token string
+    async def delete_user(self, user_id: str) -> None:
+        """Delete user account (admin only)."""
+        await self.client.send_command("auth/user/delete", user_id=user_id)
 
-    Raises:
-        AuthenticationFailed: If token creation fails
-        CannotConnect: If unable to connect to server
-    """
-    # Ensure we have a session
-    session_provided = aiohttp_session is not None
-    if aiohttp_session:
-        session = aiohttp_session
-    else:
-        # Create session with SSL context if provided
-        connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
-        session = aiohttp.ClientSession(connector=connector)
+    async def enable_user(self, user_id: str) -> None:
+        """Enable user account (admin only)."""
+        await self.client.send_command("auth/user/enable", user_id=user_id)
 
-    # Normalize server URL
-    if not server_url.endswith("/"):
-        server_url = f"{server_url}/"
+    async def disable_user(self, user_id: str) -> None:
+        """Disable user account (admin only)."""
+        await self.client.send_command("auth/user/disable", user_id=user_id)
 
-    try:
-        # Send token creation request
-        async with session.post(
-            f"{server_url}auth/tokens",
-            json={"name": token_name, "is_long_lived": True},
-            headers={"Authorization": f"Bearer {access_token}"},
-        ) as response:
-            if response.status == 401:
-                msg = "Invalid or expired access token"
-                raise AuthenticationFailed(msg)
+    async def get_user_providers(self) -> list[UserAuthProvider]:
+        """Get current user's linked authentication providers."""
+        return [
+            UserAuthProvider.from_dict(provider)
+            for provider in await self.client.send_command("auth/user/providers")
+        ]
 
-            if response.status != 200:
-                msg = f"Token creation failed with status {response.status}"
-                raise CannotConnect(Exception(msg))
+    async def unlink_provider(self, link_id: str) -> None:
+        """Unlink authentication provider from user (admin only)."""
+        await self.client.send_command("auth/user/unlink_provider", link_id=link_id)
 
-            data = await response.json()
-            token: str = data["token"]
+    async def update_user(
+        self,
+        user_id: str | None = None,
+        username: str | None = None,
+        display_name: str | None = None,
+        avatar_url: str | None = None,
+        password: str | None = None,
+        old_password: str | None = None,
+        role: str | None = None,
+        preferences: dict[str, Any] | None = None,
+    ) -> User:
+        """
+        Update user profile information.
 
-            LOGGER.info("Successfully created long-lived token: %s", token_name)
-            return token
+        Users can update their own profile. Admins can update any user including role and password.
 
-    except aiohttp.ClientError as err:
-        raise CannotConnect(err) from err
-    finally:
-        if not session_provided:
-            await session.close()
+        Args:
+            user_id: User ID to update (optional, defaults to current user)
+            username: New username (optional)
+            display_name: New display name (optional)
+            avatar_url: New avatar URL (optional)
+            password: New password (optional, minimum 8 characters)
+            old_password: Current password (required when user updates own password)
+            role: New role - "admin" or "user" (optional, admin only)
+            preferences: User preferences dict (completely replaces existing, optional)
 
+        Returns:
+            Updated user object
+        """
+        return User.from_dict(
+            await self.client.send_command(
+                "auth/user/update",
+                user_id=user_id,
+                username=username,
+                display_name=display_name,
+                avatar_url=avatar_url,
+                password=password,
+                old_password=old_password,
+                role=role,
+                preferences=preferences,
+            )
+        )
 
-async def get_current_user(
-    server_url: str,
-    access_token: str,
-    aiohttp_session: ClientSession | None = None,
-    ssl_context: SSLContext | None = None,
-) -> User:
-    """
-    Get the current user info using an access token.
-
-    Args:
-        server_url: The base URL of the Music Assistant server
-        access_token: The access token to use
-        aiohttp_session: Optional aiohttp session to use
-        ssl_context: Optional SSL context for HTTPS connections
-
-    Returns:
-        The User object
-
-    Raises:
-        AuthenticationFailed: If the token is invalid
-        CannotConnect: If unable to connect to server
-    """
-    # Ensure we have a session
-    session_provided = aiohttp_session is not None
-    if aiohttp_session:
-        session = aiohttp_session
-    else:
-        # Create session with SSL context if provided
-        connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
-        session = aiohttp.ClientSession(connector=connector)
-
-    # Normalize server URL
-    if not server_url.endswith("/"):
-        server_url = f"{server_url}/"
-
-    try:
-        # Send request to get current user
-        async with session.get(
-            f"{server_url}auth/me",
-            headers={"Authorization": f"Bearer {access_token}"},
-        ) as response:
-            if response.status == 401:
-                msg = "Invalid or expired access token"
-                raise AuthenticationFailed(msg)
-
-            if response.status != 200:
-                msg = f"Failed to get user info with status {response.status}"
-                raise CannotConnect(Exception(msg))
-
-            data = await response.json()
-            return User.from_dict(data)
-
-    except aiohttp.ClientError as err:
-        raise CannotConnect(err) from err
-    finally:
-        if not session_provided:
-            await session.close()
-
-
-async def list_tokens(
-    server_url: str,
-    access_token: str,
-    aiohttp_session: ClientSession | None = None,
-    ssl_context: SSLContext | None = None,
-) -> list[AuthToken]:
-    """
-    List all tokens for the current user.
-
-    Args:
-        server_url: The base URL of the Music Assistant server
-        access_token: The access token to use
-        aiohttp_session: Optional aiohttp session to use
-        ssl_context: Optional SSL context for HTTPS connections
-
-    Returns:
-        List of AuthToken objects
-
-    Raises:
-        AuthenticationFailed: If the token is invalid
-        CannotConnect: If unable to connect to server
-    """
-    # Ensure we have a session
-    session_provided = aiohttp_session is not None
-    if aiohttp_session:
-        session = aiohttp_session
-    else:
-        # Create session with SSL context if provided
-        connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
-        session = aiohttp.ClientSession(connector=connector)
-
-    # Normalize server URL
-    if not server_url.endswith("/"):
-        server_url = f"{server_url}/"
-
-    try:
-        # Send request to list tokens
-        async with session.get(
-            f"{server_url}auth/tokens",
-            headers={"Authorization": f"Bearer {access_token}"},
-        ) as response:
-            if response.status == 401:
-                msg = "Invalid or expired access token"
-                raise AuthenticationFailed(msg)
-
-            if response.status != 200:
-                msg = f"Failed to list tokens with status {response.status}"
-                raise CannotConnect(Exception(msg))
-
-            data = await response.json()
-            return [AuthToken.from_dict(token) for token in data]
-
-    except aiohttp.ClientError as err:
-        raise CannotConnect(err) from err
-    finally:
-        if not session_provided:
-            await session.close()
-
-
-async def revoke_token(
-    server_url: str,
-    access_token: str,
-    token_id: str,
-    aiohttp_session: ClientSession | None = None,
-    ssl_context: SSLContext | None = None,
-) -> None:
-    """
-    Revoke a token.
-
-    Args:
-        server_url: The base URL of the Music Assistant server
-        access_token: The access token to use
-        token_id: The ID of the token to revoke
-        aiohttp_session: Optional aiohttp session to use
-        ssl_context: Optional SSL context for HTTPS connections
-
-    Raises:
-        AuthenticationFailed: If the token is invalid
-        CannotConnect: If unable to connect to server
-    """
-    # Ensure we have a session
-    session_provided = aiohttp_session is not None
-    if aiohttp_session:
-        session = aiohttp_session
-    else:
-        # Create session with SSL context if provided
-        connector = aiohttp.TCPConnector(ssl=ssl_context) if ssl_context else None
-        session = aiohttp.ClientSession(connector=connector)
-
-    # Normalize server URL
-    if not server_url.endswith("/"):
-        server_url = f"{server_url}/"
-
-    try:
-        # Send request to revoke token
-        async with session.delete(
-            f"{server_url}auth/tokens/{token_id}",
-            headers={"Authorization": f"Bearer {access_token}"},
-        ) as response:
-            if response.status == 401:
-                msg = "Invalid or expired access token"
-                raise AuthenticationFailed(msg)
-
-            if response.status != 200:
-                msg = f"Failed to revoke token with status {response.status}"
-                raise CannotConnect(Exception(msg))
-
-            LOGGER.info("Successfully revoked token: %s", token_id)
-
-    except aiohttp.ClientError as err:
-        raise CannotConnect(err) from err
-    finally:
-        if not session_provided:
-            await session.close()
-
-
-async def login_with_token(
-    server_url: str,
-    username: str,
-    password: str,
-    token_name: str = "Music Assistant Client",  # noqa: S107
-    aiohttp_session: ClientSession | None = None,
-    ssl_context: SSLContext | None = None,
-) -> tuple[User, str]:
-    """
-    Login and immediately create a long-lived token.
-
-    This is a convenience method that combines login() and create_long_lived_token().
-
-    Args:
-        server_url: The base URL of the Music Assistant server
-        username: The username to authenticate with
-        password: The password to authenticate with
-        token_name: A friendly name for the token (default: "Music Assistant Client")
-        aiohttp_session: Optional aiohttp session to use
-        ssl_context: Optional SSL context for HTTPS connections
-
-    Returns:
-        A tuple of (User, long_lived_token)
-
-    Raises:
-        LoginFailed: If authentication fails
-        CannotConnect: If unable to connect to server
-    """
-    # First, login to get access token
-    user, access_token = await login(server_url, username, password, aiohttp_session, ssl_context)
-
-    # Then create a long-lived token
-    long_lived_token = await create_long_lived_token(
-        server_url, access_token, token_name, aiohttp_session, ssl_context
-    )
-
-    return user, long_lived_token
+    async def logout(self) -> None:
+        """Logout current user by revoking the current token."""
+        await self.client.send_command("auth/logout")

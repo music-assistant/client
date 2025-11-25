@@ -26,6 +26,7 @@ from music_assistant_models.errors import ERROR_MAP, AuthenticationFailed, Authe
 from music_assistant_models.event import MassEvent
 from music_assistant_models.provider import ProviderInstance, ProviderManifest
 
+from .auth import Auth
 from .config import Config
 from .connection import WebsocketsConnection
 from .constants import API_SCHEMA_VERSION
@@ -75,6 +76,7 @@ class MusicAssistantClient:
         self._subscribers: list[EventSubscriptionType] = []
         self._stop_called: bool = False
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._auth = Auth(self)
         self._config = Config(self)
         self._players = Players(self)
         self._player_queues = PlayerQueues(self)
@@ -99,6 +101,11 @@ class MusicAssistantClient:
     def provider_manifests(self) -> list[ProviderManifest]:
         """Return all Provider manifests."""
         return list(self._provider_manifests.values())
+
+    @property
+    def auth(self) -> Auth:
+        """Return Auth handler."""
+        return self._auth
 
     @property
     def config(self) -> Config:
