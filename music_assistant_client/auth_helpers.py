@@ -159,7 +159,6 @@ async def create_long_lived_token(
     ) as client:
         long_lived_token = await client.auth.create_token(token_name)
         LOGGER.info("Successfully created long-lived token: %s", token_name)
-        await client.disconnect()
         return long_lived_token
 
 

@@ -76,6 +76,7 @@ class MusicAssistantClient:
         self._subscribers: list[EventSubscriptionType] = []
         self._stop_called: bool = False
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._listening: bool = False
         self._auth = Auth(self)
         self._config = Config(self)
         self._players = Players(self)
@@ -254,38 +255,20 @@ class MusicAssistantClient:
                 )
                 raise AuthenticationRequired(msg)
 
-            # Send authentication command
-            command_message = CommandMessage(
-                message_id=uuid.uuid4().hex,
-                command="auth",
-                args={"token": self.connection.auth_token},
-            )
-            await self.connection.send_message(command_message.to_dict())
-
-            # Read and handle the auth response directly
-            # (start_listening is not running yet, so we must read the response here)
+            # Send authentication command using send_command
+            # (works without start_listening since send_command handles responses directly)
             try:
-                auth_response = await asyncio.wait_for(
-                    self.connection.receive_message(), timeout=10
-                )
-                auth_msg = parse_message(auth_response)
-                if isinstance(auth_msg, ErrorResultMessage):
-                    await self.connection.disconnect()
-                    exc = ERROR_MAP.get(auth_msg.error_code, AuthenticationFailed)
-                    raise exc(auth_msg.details)
-                if isinstance(auth_msg, SuccessResultMessage):
-                    if not auth_msg.result:
-                        await self.connection.disconnect()
-                        msg = "Authentication failed - invalid or expired token"
-                        raise AuthenticationFailed(msg)
-                else:
-                    await self.connection.disconnect()
-                    msg = f"Unexpected auth response: {auth_msg}"
-                    raise AuthenticationFailed(msg)
-            except TimeoutError as err:
+                result = await self.send_command("auth", token=self.connection.auth_token)
+            except Exception as err:
                 await self.connection.disconnect()
-                msg = "Authentication timeout"
+                if isinstance(err, AuthenticationFailed):
+                    raise
+                msg = f"Authentication failed: {err}"
                 raise AuthenticationFailed(msg) from err
+            if not result:
+                await self.connection.disconnect()
+                msg = "Authentication failed - invalid or expired token"
+                raise AuthenticationFailed(msg)
 
         self.logger.info(
             "Connected to Music Assistant Server %s, Version %s, Schema Version %s",
@@ -301,7 +284,7 @@ class MusicAssistantClient:
         **kwargs: Any,
     ) -> Any:
         """Send a command and get a response."""
-        if not self.connection.connected or not self._loop:
+        if not self.connection.connected:
             msg = "Not connected"
             raise InvalidState(msg)
 
@@ -321,6 +304,29 @@ class MusicAssistantClient:
             command=command,
             args=kwargs,
         )
+
+        # If start_listening is not running, we need to read the response directly
+        if not self._listening:
+            await self.connection.send_message(command_message.to_dict())
+            # Read messages until we get the response for our command
+            while True:
+                raw = await self.connection.receive_message()
+                response = parse_message(raw)
+                if not isinstance(response, ResultMessageBase):
+                    # Ignore other messages (e.g., events) when not listening
+                    continue
+                if response.message_id != command_message.message_id:
+                    continue
+                if isinstance(response, SuccessResultMessage):
+                    return response.result
+                if isinstance(response, ErrorResultMessage):
+                    exc = ERROR_MAP[response.error_code]
+                    raise exc(response.details)
+
+        # Normal path when start_listening is running
+        if not self._loop:
+            msg = "Not connected"
+            raise InvalidState(msg)
         future: asyncio.Future[Any] = self._loop.create_future()
         self._result_futures[command_message.message_id] = future
         await self.connection.send_message(command_message.to_dict())
@@ -356,6 +362,7 @@ class MusicAssistantClient:
     async def start_listening(self, init_ready: asyncio.Event | None = None) -> None:
         """Connect (if needed) and start listening to incoming messages from the server."""
         await self.connect()
+        self._listening = True
 
         # fetch initial state
         # we do this in a separate task to not block reading messages
@@ -390,6 +397,7 @@ class MusicAssistantClient:
     async def disconnect(self) -> None:
         """Disconnect the client and cleanup."""
         self._stop_called = True
+        self._listening = False
         # cancel all command-tasks awaiting a result
         for future in self._result_futures.values():
             future.cancel()
