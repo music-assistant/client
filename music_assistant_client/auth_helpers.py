@@ -125,13 +125,10 @@ async def login_with_token(
     user, access_token = await login(server_url, username, password, aiohttp_session, ssl_context)
 
     # Create a client with the session token and create a long-lived token
-    async with MusicAssistantClient(
-        server_url, aiohttp_session, access_token, ssl_context
-    ) as client:
-        long_lived_token = await client.auth.create_token(token_name)
-        LOGGER.info("Successfully created long-lived token: %s", token_name)
-        await client.disconnect()
-        return user, long_lived_token
+    long_lived_token = await create_long_lived_token(
+        server_url, access_token, token_name, aiohttp_session, ssl_context
+    )
+    return user, long_lived_token
 
 
 async def create_long_lived_token(
@@ -162,6 +159,7 @@ async def create_long_lived_token(
     ) as client:
         long_lived_token = await client.auth.create_token(token_name)
         LOGGER.info("Successfully created long-lived token: %s", token_name)
+        await client.disconnect()
         return long_lived_token
 
 
