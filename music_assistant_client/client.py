@@ -253,22 +253,32 @@ class MusicAssistantClient:
                 command="auth",
                 args={"token": self.connection.auth_token},
             )
-            future: asyncio.Future[Any] = self._loop.create_future()
-            self._result_futures[command_message.message_id] = future
             await self.connection.send_message(command_message.to_dict())
 
+            # Read and handle the auth response directly
+            # (start_listening is not running yet, so we must read the response here)
             try:
-                auth_result = await asyncio.wait_for(future, timeout=10)
-                if not auth_result:
+                auth_response = await asyncio.wait_for(
+                    self.connection.receive_message(), timeout=10
+                )
+                auth_msg = parse_message(auth_response)
+                if isinstance(auth_msg, ErrorResultMessage):
                     await self.connection.disconnect()
-                    msg = "Authentication failed - invalid or expired token"
+                    exc = ERROR_MAP.get(auth_msg.error_code, AuthenticationFailed)
+                    raise exc(auth_msg.details)
+                if isinstance(auth_msg, SuccessResultMessage):
+                    if not auth_msg.result:
+                        await self.connection.disconnect()
+                        msg = "Authentication failed - invalid or expired token"
+                        raise AuthenticationFailed(msg)
+                else:
+                    await self.connection.disconnect()
+                    msg = f"Unexpected auth response: {auth_msg}"
                     raise AuthenticationFailed(msg)
             except TimeoutError as err:
                 await self.connection.disconnect()
                 msg = "Authentication timeout"
                 raise AuthenticationFailed(msg) from err
-            finally:
-                self._result_futures.pop(command_message.message_id, None)
 
         self.logger.info(
             "Connected to Music Assistant Server %s, Version %s, Schema Version %s",
