@@ -130,6 +130,7 @@ async def login_with_token(
     ) as client:
         long_lived_token = await client.auth.create_token(token_name)
         LOGGER.info("Successfully created long-lived token: %s", token_name)
+        await client.disconnect()
         return user, long_lived_token
 
 
