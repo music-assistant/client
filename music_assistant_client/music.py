@@ -48,8 +48,17 @@ class Music:
         limit: int | None = None,
         offset: int | None = None,
         order_by: str | None = None,
+        provider: str | list[str] | None = None,
     ) -> list[Track]:
-        """Get Track listing from the server."""
+        """Get Track listing from the server.
+
+        :param favorite: Filter by favorite status.
+        :param search: Filter by search query.
+        :param limit: Maximum number of items to return.
+        :param offset: Number of items to skip.
+        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param provider: Filter by provider instance ID or domain (single string or list).
+        """
         return [
             Track.from_dict(obj)
             for obj in await self.client.send_command(
@@ -59,6 +68,7 @@ class Music:
                 limit=limit,
                 offset=offset,
                 order_by=order_by,
+                provider=provider,
             )
         ]
 
@@ -130,8 +140,18 @@ class Music:
         offset: int | None = None,
         order_by: str | None = None,
         album_types: list[AlbumType] | None = None,
+        provider: str | list[str] | None = None,
     ) -> list[Album]:
-        """Get Albums listing from the server."""
+        """Get Albums listing from the server.
+
+        :param favorite: Filter by favorite status.
+        :param search: Filter by search query.
+        :param limit: Maximum number of items to return.
+        :param offset: Number of items to skip.
+        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param album_types: Filter by album types.
+        :param provider: Filter by provider instance ID or domain (single string or list).
+        """
         return [
             Album.from_dict(obj)
             for obj in await self.client.send_command(
@@ -142,6 +162,7 @@ class Music:
                 offset=offset,
                 order_by=order_by,
                 album_types=album_types,
+                provider=provider,
             )
         ]
 
@@ -201,8 +222,18 @@ class Music:
         offset: int | None = None,
         order_by: str | None = None,
         album_artists_only: bool = False,
+        provider: str | list[str] | None = None,
     ) -> list[Artist]:
-        """Get Artists listing from the server."""
+        """Get Artists listing from the server.
+
+        :param favorite: Filter by favorite status.
+        :param search: Filter by search query.
+        :param limit: Maximum number of items to return.
+        :param offset: Number of items to skip.
+        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param album_artists_only: Only return artists that have albums.
+        :param provider: Filter by provider instance ID or domain (single string or list).
+        """
         return [
             Artist.from_dict(obj)
             for obj in await self.client.send_command(
@@ -213,6 +244,7 @@ class Music:
                 offset=offset,
                 order_by=order_by,
                 album_artists_only=album_artists_only,
+                provider=provider,
             )
         ]
 
@@ -273,8 +305,17 @@ class Music:
         limit: int | None = None,
         offset: int | None = None,
         order_by: str | None = None,
+        provider: str | list[str] | None = None,
     ) -> list[Playlist]:
-        """Get Playlists listing from the server."""
+        """Get Playlists listing from the server.
+
+        :param favorite: Filter by favorite status.
+        :param search: Filter by search query.
+        :param limit: Maximum number of items to return.
+        :param offset: Number of items to skip.
+        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param provider: Filter by provider instance ID or domain (single string or list).
+        """
         return [
             Playlist.from_dict(obj)
             for obj in await self.client.send_command(
@@ -284,6 +325,7 @@ class Music:
                 limit=limit,
                 offset=offset,
                 order_by=order_by,
+                provider=provider,
             )
         ]
 
@@ -357,8 +399,17 @@ class Music:
         limit: int | None = None,
         offset: int | None = None,
         order_by: str | None = None,
+        provider: str | list[str] | None = None,
     ) -> list[Audiobook]:
-        """Get Audiobooks listing from the server."""
+        """Get Audiobooks listing from the server.
+
+        :param favorite: Filter by favorite status.
+        :param search: Filter by search query.
+        :param limit: Maximum number of items to return.
+        :param offset: Number of items to skip.
+        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param provider: Filter by provider instance ID or domain (single string or list).
+        """
         return [
             Audiobook.from_dict(obj)
             for obj in await self.client.send_command(
@@ -368,6 +419,7 @@ class Music:
                 limit=limit,
                 offset=offset,
                 order_by=order_by,
+                provider=provider,
             )
         ]
 
@@ -394,8 +446,17 @@ class Music:
         limit: int | None = None,
         offset: int | None = None,
         order_by: str | None = None,
+        provider: str | list[str] | None = None,
     ) -> list[Podcast]:
-        """Get Podcasts listing from the server."""
+        """Get Podcasts listing from the server.
+
+        :param favorite: Filter by favorite status.
+        :param search: Filter by search query.
+        :param limit: Maximum number of items to return.
+        :param offset: Number of items to skip.
+        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param provider: Filter by provider instance ID or domain (single string or list).
+        """
         return [
             Podcast.from_dict(obj)
             for obj in await self.client.send_command(
@@ -405,6 +466,7 @@ class Music:
                 limit=limit,
                 offset=offset,
                 order_by=order_by,
+                provider=provider,
             )
         ]
 
@@ -446,8 +508,17 @@ class Music:
         limit: int | None = None,
         offset: int | None = None,
         order_by: str | None = None,
+        provider: str | list[str] | None = None,
     ) -> list[Radio]:
-        """Get Radio listing from the server."""
+        """Get Radio listing from the server.
+
+        :param favorite: Filter by favorite status.
+        :param search: Filter by search query.
+        :param limit: Maximum number of items to return.
+        :param offset: Number of items to skip.
+        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param provider: Filter by provider instance ID or domain (single string or list).
+        """
         return [
             Radio.from_dict(obj)
             for obj in await self.client.send_command(
@@ -457,6 +528,7 @@ class Music:
                 limit=limit,
                 offset=offset,
                 order_by=order_by,
+                provider=provider,
             )
         ]
 
