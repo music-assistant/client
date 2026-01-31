@@ -124,6 +124,17 @@ class Players:
             "players/cmd/select_source", player_id=player_id, source=source
         )
 
+    async def select_sound_mode(self, player_id: str, sound_mode: str) -> None:
+        """
+        Handle SELECT SOUND MODE command on given player.
+
+        - player_id: player_id of the player to handle the command
+        - sound_mode: The ID of the sound mode that needs to be activated/selected.
+        """
+        await self.client.send_command(
+            "players/cmd/select_sound_mode", player_id=player_id, sound_mode=sound_mode
+        )
+
     async def group(self, player_id: str, target_player: str) -> None:
         """Handle GROUP command for given player.
 
