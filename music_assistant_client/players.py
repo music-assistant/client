@@ -136,19 +136,19 @@ class Players:
         )
 
     async def set_option(
-        self, player_id: str, option_id: str, option_value: PlayerOptionValueType
+        self, player_id: str, option_key: str, option_value: PlayerOptionValueType
     ) -> None:
         """
         Handle SET_OPTION command on given player.
 
         - player_id: player_id of the player to handle the command
-        - option_id: The ID of the player option that needs to be activated/selected.
+        - option_key: The ID of the player option that needs to be activated/selected.
         - option_value: The new value of the player option
         """
         await self.client.send_command(
             "players/cmd/set_option",
             player_id=player_id,
-            option_id=option_id,
+            option_key=option_key,
             option_value=option_value,
         )
 
