@@ -135,18 +135,18 @@ class Players:
             "players/cmd/select_sound_mode", player_id=player_id, sound_mode=sound_mode
         )
 
-    async def set_player_option(
+    async def set_option(
         self, player_id: str, option_id: str, option_value: PlayerOptionValueType
     ) -> None:
         """
-        Handle SET_PLAYER_OPTION command on given player.
+        Handle SET_OPTION command on given player.
 
         - player_id: player_id of the player to handle the command
         - option_id: The ID of the player option that needs to be activated/selected.
         - option_value: The new value of the player option
         """
         await self.client.send_command(
-            "players/cmd/set_player_option",
+            "players/cmd/set_option",
             player_id=player_id,
             option_id=option_id,
             option_value=option_value,
