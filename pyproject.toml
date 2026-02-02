@@ -8,7 +8,7 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
 ]
-dependencies = ["aiohttp>=3.8.6", "music_assistant_models==1.1.89", "orjson>=3.9"]
+dependencies = ["aiohttp>=3.8.6", "music_assistant_models==1.1.95", "orjson>=3.9"]
 description = "Music Assistant Client"
 license = {text = "Apache-2.0"}
 name = "music_assistant_client"
