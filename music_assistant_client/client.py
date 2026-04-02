@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import urllib.parse
 import uuid
@@ -453,7 +454,7 @@ class MusicAssistantClient:
                 continue
             if not (id_filter is None or event.object_id in id_filter):
                 continue
-            if asyncio.iscoroutinefunction(cb_func):
+            if inspect.iscoroutinefunction(cb_func):
                 asyncio.run_coroutine_threadsafe(cb_func(event), self._loop)
             else:
                 self._loop.call_soon_threadsafe(cb_func, event)
