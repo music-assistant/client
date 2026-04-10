@@ -4,7 +4,6 @@ authors = [
 ]
 classifiers = [
   "Environment :: Console",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
 ]
@@ -13,7 +12,7 @@ description = "Music Assistant Client"
 license = {text = "Apache-2.0"}
 name = "music_assistant_client"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 # The version is set by GH action on release
 version = "0.0.0"
 
