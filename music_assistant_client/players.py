@@ -73,7 +73,7 @@ class Players:
 
     async def play_pause(self, player_id: str) -> None:
         """Send PLAY_PAUSE (toggle) command to given player (directly)."""
-        await self.client.send_command("players/cmd/pause", player_id=player_id)
+        await self.client.send_command("players/cmd/play_pause", player_id=player_id)
 
     async def power(self, player_id: str, powered: bool) -> None:
         """Send POWER command to given player."""
