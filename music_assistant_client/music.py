@@ -911,17 +911,17 @@ class Music:
         username_or_user_id: str | None = None,
     ) -> MediaItemType | ItemMapping | None:
         """Try to find a media item (such as a playlist) by name."""
-        return cast(
-            "MediaItemType | ItemMapping | None",
-            await self.client.send_command(
-                "music/item_by_name",
-                name=name,
-                artist=artist,
-                album=album,
-                media_type=media_type,
-                username_or_user_id=username_or_user_id,
-            ),
+        response = await self.client.send_command(
+            "music/item_by_name",
+            name=name,
+            artist=artist,
+            album=album,
+            media_type=media_type,
+            username_or_user_id=username_or_user_id,
         )
+        if response is None:
+            return None
+        return media_from_dict(response)
 
     async def album_count(
         self,
