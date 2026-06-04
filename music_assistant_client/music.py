@@ -623,18 +623,40 @@ class Music:
             )
         ]
 
-    async def in_progress_items(self, limit: int = 10) -> list[ItemMapping]:
+    async def recently_added_tracks(
+        self, limit: int = 10, username_or_user_id: str | None = None
+    ) -> list[Track]:
+        """Return a list of the last added tracks."""
+        return [
+            Track.from_dict(item)
+            for item in await self.client.send_command(
+                "music/recently_added_tracks", limit=limit, username_or_user_id=username_or_user_id
+            )
+        ]
+
+    async def in_progress_items(
+        self, limit: int = 10, all_users: bool = False, username_or_user_id: str | None = None
+    ) -> list[ItemMapping]:
         """Return a list of the Audiobooks and PodcastEpisodes that are in progress."""
         return [
             ItemMapping.from_dict(item)
-            for item in await self.client.send_command("music/in_progress_items", limit=limit)
+            for item in await self.client.send_command(
+                "music/in_progress_items",
+                limit=limit,
+                all_users=all_users,
+                username_or_user_id=username_or_user_id,
+            )
         ]
 
-    async def recommendations(self) -> list[RecommendationFolder]:
+    async def recommendations(
+        self, username_or_user_id: str | None = None
+    ) -> list[RecommendationFolder]:
         """Get all recommendations."""
         return [
             RecommendationFolder.from_dict(item)
-            for item in await self.client.send_command("music/recommendations")
+            for item in await self.client.send_command(
+                "music/recommendations", username_or_user_id=username_or_user_id
+            )
         ]
 
     async def get_item_by_uri(
@@ -886,70 +908,20 @@ class Music:
         artist: str | None = None,
         album: str | None = None,
         media_type: MediaType | None = None,
+        username_or_user_id: str | None = None,
     ) -> MediaItemType | ItemMapping | None:
         """Try to find a media item (such as a playlist) by name."""
-        searchname = name.lower()
-        library_functions = [
-            x
-            for x in (
-                self.get_library_playlists,
-                self.get_library_radios,
-                self.get_library_tracks,
-                self.get_library_albums,
-                self.get_library_artists,
-                self.get_library_audiobooks,
-                self.get_library_podcasts,
-            )
-            if not media_type or media_type.value.lower() in x.__name__
-        ]
-        # prefer (exact) lookup in the library by name
-        for func in library_functions:
-            result = await func(search=searchname)
-            for item in result:
-                # handle optional artist filter
-                if (
-                    artist
-                    and (artists := getattr(item, "artists", None))
-                    and not any(x for x in artists if x.name.lower() == artist.lower())
-                ):
-                    continue
-                # handle optional album filter
-                if (
-                    album
-                    and (item_album := getattr(item, "album", None))
-                    and item_album.name.lower() != album.lower()
-                ):
-                    continue
-                if searchname == item.name.lower():
-                    return item
-        # nothing found in the library, fallback to global search
-        search_name = name
-        if album and artist:
-            search_name = f"{artist} - {album} - {name}"
-        elif album:
-            search_name = f"{album} - {name}"
-        elif artist:
-            search_name = f"{artist} - {name}"
-        search_results = await self.search(
-            search_query=search_name,
-            media_types=[media_type]
-            if media_type and media_type != MediaType.UNKNOWN
-            else MediaType.ALL,
-            limit=8,
+        return cast(
+            "MediaItemType | ItemMapping | None",
+            await self.client.send_command(
+                "music/item_by_name",
+                name=name,
+                artist=artist,
+                album=album,
+                media_type=media_type,
+                username_or_user_id=username_or_user_id,
+            ),
         )
-        for results in (
-            search_results.tracks,
-            search_results.albums,
-            search_results.playlists,
-            search_results.artists,
-            search_results.radio,
-            search_results.audiobooks,
-            search_results.podcasts,
-        ):
-            for _item in results:
-                # simply return the first item because search is already sorted by best match
-                return _item
-        return None
 
     async def album_count(
         self,
@@ -1272,4 +1244,18 @@ class Music:
                 update=update,
                 overwrite=overwrite,
             )
+        )
+
+    async def verify_item_uri(self, uri: str, username_or_user_id: str | None = None) -> bool:
+        """Verify, if a uri specifies a valid item.
+
+        If username_or_user_id is specified, verifies additionally, if this user may access this
+        item. This requires the requesting (i.e. authorized user) to be able to access this item as
+        well.
+        """
+        return cast(
+            "bool",
+            await self.client.send_command(
+                "music/verify_item_uri", uri=uri, username_or_user_id=username_or_user_id
+            ),
         )
