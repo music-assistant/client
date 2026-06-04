@@ -888,7 +888,6 @@ class Music:
         media_type: MediaType | None = None,
     ) -> MediaItemType | ItemMapping | None:
         """Try to find a media item (such as a playlist) by name."""
-        # pylint: disable=too-many-nested-blocks
         searchname = name.lower()
         library_functions = [
             x
