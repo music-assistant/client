@@ -74,6 +74,8 @@ class MusicAssistantClient:
         self.connection = WebsocketsConnection(server_url, aiohttp_session, token, ssl_context)
         self.logger = logging.getLogger(__package__)
         self._result_futures: dict[str | int, asyncio.Future[Any]] = {}
+        # buffer for chunked/streamed (partial) command results, keyed by message_id
+        self._partial_results: dict[str | int, list[Any]] = {}
         self._subscribers: list[EventSubscriptionType] = []
         self._stop_called: bool = False
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -312,6 +314,7 @@ class MusicAssistantClient:
         if not self._listening:
             await self.connection.send_message(command_message.to_dict())
             # Read messages until we get the response for our command
+            partial_result: list[Any] | None = None
             while True:
                 raw = await self.connection.receive_message()
                 response = parse_message(raw)
@@ -321,6 +324,15 @@ class MusicAssistantClient:
                 if response.message_id != command_message.message_id:
                     continue
                 if isinstance(response, SuccessResultMessage):
+                    if response.partial:
+                        # chunked/streamed result: accumulate and wait for the final message
+                        if partial_result is None:
+                            partial_result = []
+                        partial_result.extend(response.result)
+                        continue
+                    if partial_result is not None:
+                        partial_result.extend(response.result)
+                        return partial_result
                     return response.result
                 if isinstance(response, ErrorResultMessage):
                     exc = ERROR_MAP[response.error_code]
@@ -404,6 +416,7 @@ class MusicAssistantClient:
         # cancel all command-tasks awaiting a result
         for future in self._result_futures.values():
             future.cancel()
+        self._partial_results.clear()
         await self.connection.disconnect()
 
     def _handle_incoming_message(self, raw: dict[str, Any]) -> None:
@@ -418,12 +431,22 @@ class MusicAssistantClient:
             future = self._result_futures.get(msg.message_id)
 
             if future is None:
-                # no listener for this result
+                # no listener for this result, discard any buffered partial result
+                self._partial_results.pop(msg.message_id, None)
                 return
             if isinstance(msg, SuccessResultMessage):
-                future.set_result(msg.result)
+                if msg.partial:
+                    # chunked/streamed result: accumulate and wait for the final message
+                    self._partial_results.setdefault(msg.message_id, []).extend(msg.result)
+                    return
+                if (partial := self._partial_results.pop(msg.message_id, None)) is not None:
+                    partial.extend(msg.result)
+                    future.set_result(partial)
+                else:
+                    future.set_result(msg.result)
                 return
             if isinstance(msg, ErrorResultMessage):
+                self._partial_results.pop(msg.message_id, None)
                 exc = ERROR_MAP[msg.error_code]
                 future.set_exception(exc(msg.details))
                 return
