@@ -424,10 +424,17 @@ class Players:
 
     async def _get_player_configs(self) -> dict[str, list[ConfigEntry]]:
         """Fetch all player configs."""
-        return {
-            player_id: await self.client.config.get_player_config_entries(player_id)
-            for player_id in self._players
-        }
+        # does not correctly set the value
+        # ---> self.client.config.get_player_config_entries(player_id)
+        all_configs: dict[str, list[ConfigEntry]] = {}
+        for player_id in self._players:
+            data = await self.client.send_command("config/players/get", player_id=player_id)
+            player_configs = cast("dict[str, dict]", data.get("values", {}))
+            all_configs[player_id] = [
+                ConfigEntry.from_dict(config_entry_dict)
+                for config_entry_dict in player_configs.values()
+            ]
+        return all_configs
 
     async def fetch_state(self) -> None:
         """Fetch initial state once the server is connected."""
