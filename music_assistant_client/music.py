@@ -24,7 +24,6 @@ from music_assistant_models.media_items import (
     Track,
     media_from_dict,
 )
-from music_assistant_models.provider import SyncTask
 
 if TYPE_CHECKING:
     from music_assistant_models.queue_item import QueueItem
@@ -574,10 +573,6 @@ class Music:
         providers: only sync these provider instances. None for all.
         """
         await self.client.send_command("music/sync", media_types=media_types, providers=providers)
-
-    async def get_running_sync_tasks(self) -> list[SyncTask]:
-        """Return list with providers that are currently (scheduled for) syncing."""
-        return [SyncTask(**item) for item in await self.client.send_command("music/synctasks")]
 
     async def search(
         self,
