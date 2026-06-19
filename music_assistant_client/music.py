@@ -347,16 +347,20 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
-        page: int = 0,
+        force_refresh: bool = False,
     ) -> list[Track]:
-        """Get tracks for given playlist."""
+        """
+        Get all tracks for given playlist.
+
+        :param force_refresh: Force a refresh of the (cached) playlist tracks.
+        """
         return [
             Track.from_dict(obj)
             for obj in await self.client.send_command(
                 "music/playlists/playlist_tracks",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
-                page=page,
+                force_refresh=force_refresh,
             )
         ]
 
