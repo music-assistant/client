@@ -2,4 +2,4 @@
 
 from typing import Final
 
-API_SCHEMA_VERSION: Final[int] = 28
+API_SCHEMA_VERSION: Final[int] = 31

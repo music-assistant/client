@@ -18,10 +18,10 @@ version = "0.0.0"
 
 [project.optional-dependencies]
 test = [
-  "codespell==2.4.1",
+  "codespell==2.4.2",
   "isort==8.0.1",
-  "mypy==1.20.0",
-  "pre-commit==4.5.1",
+  "mypy==1.20.2",
+  "pre-commit==4.6.0",
   "pre-commit-hooks==6.0.0",
   "tomli==2.4.1",
   "ruff==0.14.9",
