@@ -72,6 +72,8 @@ class Auth:
         role: str = "user",
         display_name: str | None = None,
         avatar_url: str | None = None,
+        player_filter: list[str] | None = None,
+        provider_filter: list[str] | None = None,
     ) -> User:
         """Create a new user with built-in authentication (admin only)."""
         return User.from_dict(
@@ -82,6 +84,8 @@ class Auth:
                 role=role,
                 display_name=display_name,
                 avatar_url=avatar_url,
+                player_filter=player_filter,
+                provider_filter=provider_filter,
             )
         )
 
@@ -104,9 +108,14 @@ class Auth:
             for provider in await self.client.send_command("auth/user/providers")
         ]
 
-    async def unlink_provider(self, link_id: str) -> None:
+    async def unlink_provider(self, user_id: str, provider_type: str) -> bool:
         """Unlink authentication provider from user (admin only)."""
-        await self.client.send_command("auth/user/unlink_provider", link_id=link_id)
+        result: bool = await self.client.send_command(
+            "auth/user/unlink_provider",
+            user_id=user_id,
+            provider_type=provider_type,
+        )
+        return result
 
     async def update_user(
         self,
@@ -115,9 +124,10 @@ class Auth:
         display_name: str | None = None,
         avatar_url: str | None = None,
         password: str | None = None,
-        old_password: str | None = None,
         role: str | None = None,
         preferences: dict[str, Any] | None = None,
+        player_filter: list[str] | None = None,
+        provider_filter: list[str] | None = None,
     ) -> User:
         """
         Update user profile information.
@@ -130,9 +140,11 @@ class Auth:
             display_name: New display name (optional)
             avatar_url: New avatar URL (optional)
             password: New password (optional, minimum 8 characters)
-            old_password: Current password (required when user updates own password)
             role: New role - "admin" or "user" (optional, admin only)
             preferences: User preferences dict (completely replaces existing, optional)
+            player_filter: List of player IDs the user has access to (admin only, optional)
+            provider_filter: List of provider instance IDs the user has access to
+                (admin only, optional)
 
         Returns:
             Updated user object
@@ -145,9 +157,10 @@ class Auth:
                 display_name=display_name,
                 avatar_url=avatar_url,
                 password=password,
-                old_password=old_password,
                 role=role,
                 preferences=preferences,
+                player_filter=player_filter,
+                provider_filter=provider_filter,
             )
         )
 

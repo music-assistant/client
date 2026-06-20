@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from music_assistant_models.media_items import media_from_dict
+from music_assistant_models.media_items import MediaItemPalette, media_from_dict
 
 if TYPE_CHECKING:
-    from music_assistant_models.media_items import MediaItemType
+    from music_assistant_models.media_items import MediaItemImage, MediaItemType
 
     from .client import MusicAssistantClient
 
@@ -50,3 +50,20 @@ class Metadata:
                 )
             ),
         )
+
+    async def get_image_palette(
+        self,
+        image: MediaItemImage | str,
+    ) -> MediaItemPalette | None:
+        """
+        Get the color palette extracted from an image.
+
+        :param image: A MediaItemImage to read colors from, or an image URL (either a
+            direct URL or an imageproxy URL as produced by `get_image_url`).
+        """
+        result = await self.client.send_command(
+            "metadata/get_image_palette",
+            image=image,
+            require_schema=32,
+        )
+        return MediaItemPalette.from_dict(result) if result else None

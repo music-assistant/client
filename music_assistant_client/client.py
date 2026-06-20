@@ -59,6 +59,7 @@ class MusicAssistantClient:
         aiohttp_session: ClientSession | None,
         token: str | None = None,
         ssl_context: SSLContext | None = None,
+        locale: str | None = None,
     ) -> None:
         """
         Initialize the Music Assistant client.
@@ -69,10 +70,13 @@ class MusicAssistantClient:
             token: Optional authentication token (required for schema >= 28)
             ssl_context: Optional SSL context for HTTPS connections. Use this for
                 custom CA certificates or self-signed certificates.
+            locale: Optional UI locale (e.g. "nl" or "de_DE") to declare to the server
+                (requires schema >= 33). Used to localize server-provided strings.
         """
         self.server_url = server_url
         self.connection = WebsocketsConnection(server_url, aiohttp_session, token, ssl_context)
         self.logger = logging.getLogger(__package__)
+        self._locale = locale
         self._result_futures: dict[str | int, asyncio.Future[Any]] = {}
         # buffer for chunked/streamed (partial) command results, keyed by message_id
         self._partial_results: dict[str | int, list[Any]] = {}
@@ -263,7 +267,11 @@ class MusicAssistantClient:
             # Send authentication command using send_command
             # (works without start_listening since send_command handles responses directly)
             try:
-                result = await self.send_command("auth", token=self.connection.auth_token)
+                auth_args: dict[str, Any] = {"token": self.connection.auth_token}
+                # the UI locale can be declared with the auth command (schema >= 33)
+                if info.schema_version >= 33 and self._locale:
+                    auth_args["locale"] = self._locale
+                result = await self.send_command("auth", **auth_args)
             except Exception as err:
                 await self.connection.disconnect()
                 if isinstance(err, AuthenticationFailed):
@@ -373,6 +381,29 @@ class MusicAssistantClient:
             args=kwargs,
         )
         await self.connection.send_message(command_message.to_dict())
+
+    async def get_locales(self) -> list[str]:
+        """Return the list of available UI locales (sorted)."""
+        result: list[str] = await self.send_command(
+            "translations/locales",
+            require_schema=33,
+        )
+        return result
+
+    async def set_locale(self, locale: str) -> None:
+        """
+        Set the UI locale for this connection (e.g. "nl" or "de_DE").
+
+        Used to localize server-provided strings (config entries, provider manifests
+        and localizable media item names) for subsequent commands on this connection.
+        """
+        await self.send_command(
+            "translations/set_locale",
+            locale=locale,
+            require_schema=33,
+        )
+        # remember the locale so it is re-applied automatically on reconnect
+        self._locale = locale
 
     async def start_listening(self, init_ready: asyncio.Event | None = None) -> None:
         """Connect (if needed) and start listening to incoming messages from the server."""
