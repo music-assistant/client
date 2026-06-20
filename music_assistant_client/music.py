@@ -612,21 +612,54 @@ class Music:
         ]
 
     async def recently_played(
-        self, limit: int = 10, media_types: list[MediaType] | None = None
+        self,
+        limit: int = 10,
+        media_types: list[MediaType] | None = None,
+        userid: str | None = None,
+        queue_id: str | None = None,
+        fully_played_only: bool = True,
+        user_initiated_only: bool = False,
+        played_after_timestamp: int | None = None,
     ) -> list[ItemMapping]:
-        """Return a list of the last played items."""
+        """
+        Return a list of the last played items.
+
+        :param limit: Maximum number of items to return.
+        :param media_types: Filter by media types.
+        :param userid: Optionally return the history of this user (instead of the user the
+            client is authenticated as). Requires the authenticated client to have sufficient
+            permissions.
+        :param queue_id: Filter by specific queue ID.
+        :param fully_played_only: If True, only return fully played items.
+        :param user_initiated_only: If True, only return items initiated by the user.
+        :param played_after_timestamp: If set, only return items played at or after this
+            epoch-seconds timestamp.
+        """
         return [
             ItemMapping.from_dict(item)
             for item in await self.client.send_command(
-                "music/recently_played_items", limit=limit, media_types=media_types
+                "music/recently_played_items",
+                limit=limit,
+                media_types=media_types,
+                userid=userid,
+                queue_id=queue_id,
+                fully_played_only=fully_played_only,
+                user_initiated_only=user_initiated_only,
+                played_after_timestamp=played_after_timestamp,
             )
         ]
 
-    async def in_progress_items(self, limit: int = 10) -> list[ItemMapping]:
+    async def in_progress_items(
+        self, limit: int = 10, all_users: bool = False
+    ) -> list[ItemMapping]:
         """Return a list of the Audiobooks and PodcastEpisodes that are in progress."""
         return [
             ItemMapping.from_dict(item)
-            for item in await self.client.send_command("music/in_progress_items", limit=limit)
+            for item in await self.client.send_command(
+                "music/in_progress_items",
+                limit=limit,
+                all_users=all_users,
+            )
         ]
 
     async def recommendations(self) -> list[RecommendationFolder]:
@@ -642,6 +675,24 @@ class Music:
     ) -> MediaItemType | ItemMapping:
         """Get single music item providing a mediaitem uri."""
         return media_from_dict(await self.client.send_command("music/item_by_uri", uri=uri))
+
+    async def verify_item_uri(self, uri: str, username: str | None = None) -> bool:
+        """
+        Verify whether a uri points to a valid, accessible item.
+
+        :param username: Optionally verify access on behalf of this user (instead of the
+            user the client is authenticated as). Requires the authenticated client to have
+            sufficient permissions.
+        """
+        return cast(
+            "bool",
+            await self.client.send_command(
+                "music/verify_item_uri",
+                uri=uri,
+                username=username,
+                require_schema=33,
+            ),
+        )
 
     async def get_item(
         self,
@@ -685,17 +736,17 @@ class Music:
     async def remove_item_from_favorites(
         self,
         media_type: MediaType,
-        item_id: str | int,
+        library_item_id: str | int,
     ) -> None:
         """Remove (library) item from the favorites."""
         await self.client.send_command(
             "music/favorites/remove_item",
             media_type=media_type,
-            item_id=item_id,
+            library_item_id=library_item_id,
         )
 
     async def remove_item_from_library(
-        self, media_type: MediaType, library_item_id: str | int
+        self, media_type: MediaType, library_item_id: str | int, recursive: bool = True
     ) -> None:
         """
         Remove item from the library.
@@ -706,6 +757,7 @@ class Music:
             "music/library/remove_item",
             media_type=media_type,
             library_item_id=library_item_id,
+            recursive=recursive,
         )
 
     async def add_item_to_library(
@@ -732,20 +784,42 @@ class Music:
         self,
         media_item: MediaItemType,
         fully_played: bool = True,
+        userid: str | None = None,
     ) -> None:
-        """Mark item as played in playlog."""
+        """
+        Mark item as played in playlog.
+
+        :param media_item: The media item to mark as played.
+        :param fully_played: If True, mark the item as fully played.
+        :param userid: Optionally attribute this play to a specific user (instead of the user
+            the client is authenticated as). Requires the authenticated client to have
+            sufficient permissions.
+        """
         await self.client.send_command(
             "music/mark_played",
             media_item=media_item,
             fully_played=fully_played,
+            userid=userid,
         )
 
     async def mark_item_unplayed(
         self,
         media_item: MediaItemType,
+        userid: str | None = None,
     ) -> None:
-        """Mark item as unplayed in playlog."""
-        await self.client.send_command("music/mark_unplayed", media_item=media_item)
+        """
+        Mark item as unplayed in playlog.
+
+        :param media_item: The media item to mark as unplayed.
+        :param userid: Optionally apply this to a specific user (instead of the user the
+            client is authenticated as). Requires the authenticated client to have sufficient
+            permissions.
+        """
+        await self.client.send_command(
+            "music/mark_unplayed",
+            media_item=media_item,
+            userid=userid,
+        )
 
     async def get_track_by_name(
         self,
@@ -885,8 +959,32 @@ class Music:
         artist: str | None = None,
         album: str | None = None,
         media_type: MediaType | None = None,
+        username: str | None = None,
     ) -> MediaItemType | ItemMapping | None:
-        """Try to find a media item (such as a playlist) by name."""
+        """
+        Try to find a media item (such as a playlist) by name.
+
+        :param username: Optionally perform the lookup on behalf of this user (instead of the
+            user the client is authenticated as). Requires the authenticated client to have
+            sufficient permissions. Only honored by the native server lookup (schema >= 33);
+            the legacy fallback always runs as the authenticated user.
+        """
+        assert self.client.server_info  # for type checking
+        if self.client.server_info.schema_version >= 33:
+            # from schema version 33+, the server can handle this natively
+            if result := await self.client.send_command(
+                "music/item_by_name",
+                name=name,
+                artist=artist,
+                album=album,
+                media_type=media_type,
+                username=username,
+            ):
+                return media_from_dict(result)
+            return None
+
+        # Fallback implementation for older server versions.
+        # TODO: remove this after a while, once all/most servers are updated
         # pylint: disable=too-many-nested-blocks
         searchname = name.lower()
         library_functions = [

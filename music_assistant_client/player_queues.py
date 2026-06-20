@@ -189,6 +189,8 @@ class PlayerQueues:
         option: QueueOption | None = None,
         radio_mode: bool = False,
         start_item: str | None = None,
+        username: str | None = None,
+        sort_by: str | None = None,
     ) -> None:
         """
         Play media item(s) on the given queue.
@@ -197,6 +199,10 @@ class PlayerQueues:
         - queue_opt: Which enqueue mode to use.
         - radio_mode: Enable radio mode for the given item(s).
         - start_item: Optional item to start the playlist or album from.
+        - username: Optionally attribute the playback to this user (instead of the user the
+          client is authenticated as), e.g. for playback history when triggered from automation.
+          Requires the authenticated client to have sufficient permissions.
+        - sort_by: Optional sort key to order tracks before applying start_item.
         """
         await self.client.send_command(
             "player_queues/play_media",
@@ -205,6 +211,8 @@ class PlayerQueues:
             option=option,
             radio_mode=radio_mode,
             start_item=start_item,
+            username=username,
+            sort_by=sort_by,
         )
 
     async def transfer(

@@ -51,12 +51,20 @@ class Config:
             await self.client.send_command("config/providers/get", instance_id=instance_id)
         )
 
-    async def get_provider_config_value(self, instance_id: str, key: str) -> ConfigValueType:
+    async def get_provider_config_value(
+        self,
+        instance_id: str,
+        key: str,
+        default: ConfigValueType = None,
+    ) -> ConfigValueType:
         """Return single configentry value for a provider."""
         return cast(
             "ConfigValueType",
             await self.client.send_command(
-                "config/providers/get_value", instance_id=instance_id, key=key
+                "config/providers/get_value",
+                instance_id=instance_id,
+                key=key,
+                default=default,
             ),
         )
 
@@ -125,15 +133,21 @@ class Config:
     # Player Config related commands/functions
 
     async def get_player_configs(
-        self, provider: str | None = None, include_values: bool = False
+        self,
+        provider: str | None = None,
+        include_values: bool = False,
+        include_unavailable: bool = True,
+        include_disabled: bool = True,
     ) -> list[PlayerConfig]:
-        """Return all known player configurations, optionally filtered by provider domain."""
+        """Return all known player configurations, optionally filtered by provider id."""
         return [
             PlayerConfig.from_dict(item)
             for item in await self.client.send_command(
                 "config/players",
                 provider=provider,
                 include_values=include_values,
+                include_unavailable=include_unavailable,
+                include_disabled=include_disabled,
             )
         ]
 
@@ -147,12 +161,18 @@ class Config:
         self,
         player_id: str,
         key: str,
+        default: ConfigValueType = None,
+        unpack_splitted_values: bool = False,
     ) -> ConfigValueType:
         """Return single configentry value for a player."""
         return cast(
             "ConfigValueType",
             await self.client.send_command(
-                "config/players/get_value", player_id=player_id, key=key
+                "config/players/get_value",
+                player_id=player_id,
+                key=key,
+                default=default,
+                unpack_splitted_values=unpack_splitted_values,
             ),
         )
 
@@ -191,11 +211,21 @@ class Config:
             )
         )
 
-    async def get_core_config_value(self, domain: str, key: str) -> ConfigValueType:
+    async def get_core_config_value(
+        self,
+        domain: str,
+        key: str,
+        default: ConfigValueType = None,
+    ) -> ConfigValueType:
         """Return single configentry value for a core controller."""
         return cast(
             "ConfigValueType",
-            await self.client.send_command("config/core/get_value", domain=domain, key=key),
+            await self.client.send_command(
+                "config/core/get_value",
+                domain=domain,
+                key=key,
+                default=default,
+            ),
         )
 
     async def get_core_config_entries(
