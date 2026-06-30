@@ -12,9 +12,24 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from music_assistant_models.event import MassEvent
-    from music_assistant_models.media_items import MediaItemType
+    from music_assistant_models.media_items import ItemMapping, MediaItemType
 
     from .client import MusicAssistantClient
+
+
+def radio_playlist_uri(seed: MediaItemType | ItemMapping | str) -> str:
+    """
+    Return the radio_playlist:// uri that enqueues a dynamic 'radio' for a seed item.
+
+    Pass the result to PlayerQueues.play_media to start a dynamic radio playlist based on the
+    seed item. This replaces the deprecated radio_mode=True flag.
+
+    - seed: The seed media item (artist/album/track/genre/playlist) or its uri.
+    """
+    seed_uri = seed if isinstance(seed, str) else str(seed.uri)
+    if seed_uri.startswith("radio_playlist://"):
+        return seed_uri
+    return f"radio_playlist://playlist/{seed_uri}"
 
 
 class PlayerQueues:
@@ -197,13 +212,26 @@ class PlayerQueues:
 
         - media: Media that should be played (MediaItem(s) or uri's).
         - queue_opt: Which enqueue mode to use.
-        - radio_mode: Enable radio mode for the given item(s).
+        - radio_mode: Deprecated. When True against a server that supports radio playlists, the
+          seed item(s) are translated client-side to a radio_playlist:// dynamic playlist (see
+          radio_playlist_uri); older servers still receive the flag. Prefer passing such a uri.
         - start_item: Optional item to start the playlist or album from.
         - username: Optionally attribute the playback to this user (instead of the user the
           client is authenticated as), e.g. for playback history when triggered from automation.
           Requires the authenticated client to have sufficient permissions.
         - sort_by: Optional sort key to order tracks before applying start_item.
         """
+        if (
+            radio_mode
+            and self.client.server_info is not None
+            and self.client.server_info.schema_version >= 34
+        ):
+            # schema 34+ supports radio playlists: translate the deprecated radio_mode flag into
+            # a radio_playlist:// dynamic playlist client-side. Older servers still receive the
+            # radio_mode flag (below) so radio keeps working there.
+            seeds = media if isinstance(media, list) else [media]
+            media = [radio_playlist_uri(seed) for seed in seeds]
+            radio_mode = False
         await self.client.send_command(
             "player_queues/play_media",
             queue_id=queue_id,
