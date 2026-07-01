@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from contextlib import suppress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
+from music_assistant_models.config_entries import ConfigEntry
 from music_assistant_models.enums import EventType, MediaType
 from music_assistant_models.errors import (
     MusicAssistantError,
@@ -35,10 +36,12 @@ class Players:
                 EventType.PLAYER_ADDED,
                 EventType.PLAYER_REMOVED,
                 EventType.PLAYER_UPDATED,
+                EventType.PLAYER_CONFIG_UPDATED,
             ),
         )
         # the initial items are retrieved after connect
         self._players: dict[str, Player] = {}
+        self._player_configs: dict[str, list[ConfigEntry]] = {}
 
     @property
     def players(self) -> list[Player]:
@@ -52,6 +55,10 @@ class Players:
     def get(self, player_id: str) -> Player | None:
         """Return Player by ID (or None if not found)."""
         return self._players.get(player_id)
+
+    def get_player_configs(self, player_id: str) -> list[ConfigEntry] | None:
+        """Return player config entries if found."""
+        return self._player_configs.get(player_id)
 
     def __getitem__(self, player_id: str) -> Player:
         """Return Player by ID."""
@@ -415,10 +422,25 @@ class Players:
         """Fetch all Players from the server."""
         return [Player.from_dict(item) for item in await self.client.send_command("players/all")]
 
+    async def _get_player_configs(self) -> dict[str, list[ConfigEntry]]:
+        """Fetch all player configs."""
+        # does not correctly set the value
+        # ---> self.client.config.get_player_config_entries(player_id)
+        all_configs: dict[str, list[ConfigEntry]] = {}
+        for player_id in self._players:
+            data = await self.client.send_command("config/players/get", player_id=player_id)
+            player_configs = cast("dict[str, dict]", data.get("values", {}))
+            all_configs[player_id] = [
+                ConfigEntry.from_dict(config_entry_dict)
+                for config_entry_dict in player_configs.values()
+            ]
+        return all_configs
+
     async def fetch_state(self) -> None:
         """Fetch initial state once the server is connected."""
         for player in await self._get_players():
             self._players[player.player_id] = player
+        self._player_configs = await self._get_player_configs()
 
     def _handle_event(self, event: MassEvent) -> None:
         """Handle incoming player event."""
@@ -427,10 +449,20 @@ class Players:
             assert event.object_id
             self._players[event.object_id] = Player.from_dict(event.data)
             return
+        if event.event in (EventType.PLAYER_CONFIG_UPDATED):
+            # Player events always have an object id
+            assert event.object_id
+            player_configs = cast("dict[str, dict]", event.data.get("values", {}))
+            self._player_configs[event.object_id] = [
+                ConfigEntry.from_dict(config_entry_dict)
+                for config_entry_dict in player_configs.values()
+            ]
+            return
         if event.event == EventType.PLAYER_REMOVED:
             # Player events always have an object id
             assert event.object_id
             self._players.pop(event.object_id, None)
+            self._player_configs.pop(event.object_id, None)
 
     # Backward compatibility aliases (deprecated)
     player_command_stop = stop
