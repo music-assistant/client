@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 from music_assistant_models.enums import EventType, QueueOption, RepeatMode
@@ -44,6 +45,7 @@ class PlayerQueues:
             (
                 EventType.QUEUE_ADDED,
                 EventType.QUEUE_UPDATED,
+                EventType.QUEUE_TIME_UPDATED,
             ),
         )
         # the initial items are retrieved after connect
@@ -291,6 +293,12 @@ class PlayerQueues:
             # Queue events always have an object_id
             assert event.object_id
             self._queues[event.object_id] = PlayerQueue.from_dict(event.data)
+        elif event.event == EventType.QUEUE_TIME_UPDATED:
+            # keep the cached elapsed time in sync so consumers don't read a stale value
+            assert event.object_id
+            if queue := self._queues.get(event.object_id):
+                queue.elapsed_time = float(event.data)
+                queue.elapsed_time_last_updated = time.time()
 
     def __iter__(self) -> Iterator[PlayerQueue]:
         """Iterate over (available) PlayerQueues."""
