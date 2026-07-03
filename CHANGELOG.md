@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.2](https://github.com/music-assistant/client/compare/v1.4.1...v1.4.2) (2026-07-03)
+
+
+### Miscellaneous Chores
+
+* release 1.4.2 ([cf3d9ac](https://github.com/music-assistant/client/commit/cf3d9ac57df0da2d93d67c01591499ef00ad5260))
+
 ## [1.4.1](https://github.com/music-assistant/client/compare/v1.4.0...v1.4.1) (2026-07-03)
 
 
