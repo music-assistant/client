@@ -9,6 +9,8 @@ from music_assistant_models.enums import EventType, QueueOption, RepeatMode
 from music_assistant_models.player_queue import PlayerQueue
 from music_assistant_models.queue_item import QueueItem
 
+from .helpers import impersonation_arg
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -206,6 +208,7 @@ class PlayerQueues:
         option: QueueOption | None = None,
         radio_mode: bool = False,
         start_item: str | None = None,
+        user: str | None = None,
         username: str | None = None,
         sort_by: str | None = None,
     ) -> None:
@@ -218,9 +221,10 @@ class PlayerQueues:
           seed item(s) are translated client-side to a radio_playlist:// dynamic playlist (see
           radio_playlist_uri); older servers still receive the flag. Prefer passing such a uri.
         - start_item: Optional item to start the playlist or album from.
-        - username: Optionally attribute the playback to this user (instead of the user the
-          client is authenticated as), e.g. for playback history when triggered from automation.
-          Requires the authenticated client to have sufficient permissions.
+        - user: Optionally attribute the playback to this user (user_id or username), e.g. for
+          playback history when triggered from automation. Requires the authenticated client
+          to have sufficient permissions.
+        - username: Deprecated alias for user.
         - sort_by: Optional sort key to order tracks before applying start_item.
         """
         if (
@@ -241,8 +245,8 @@ class PlayerQueues:
             option=option,
             radio_mode=radio_mode,
             start_item=start_item,
-            username=username,
             sort_by=sort_by,
+            **impersonation_arg(self.client.server_info, user or username),
         )
 
     async def transfer(

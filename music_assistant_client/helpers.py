@@ -11,12 +11,26 @@ from typing import TYPE_CHECKING, Any
 import orjson
 
 if TYPE_CHECKING:
+    from music_assistant_models.api import ServerInfoMessage
     from music_assistant_models.media_items import SearchResults
 
 JSON_ENCODE_EXCEPTIONS = (TypeError, ValueError)
 JSON_DECODE_EXCEPTIONS = (orjson.JSONDecodeError,)
 
 DO_NOT_SERIALIZE_TYPES = (MethodType, asyncio.Task)
+
+
+def impersonation_arg(server_info: ServerInfoMessage | None, user: str | None) -> dict[str, Any]:
+    """
+    Return the impersonation argument for an API command.
+
+    :param server_info: The connected server's info (to determine the schema version).
+    :param user: The user_id or username of the user to impersonate (or None).
+    """
+    if server_info is not None and server_info.schema_version >= 35:
+        return {"user": user}
+    # older servers only accept the username argument on selected commands
+    return {"username": user}
 
 
 def compact_media_item_dict(item: dict[str, Any]) -> dict[str, Any]:
