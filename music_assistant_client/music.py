@@ -25,6 +25,8 @@ from music_assistant_models.media_items import (
     media_from_dict,
 )
 
+from .helpers import impersonation_arg
+
 if TYPE_CHECKING:
     from music_assistant_models.queue_item import QueueItem
 
@@ -48,6 +50,7 @@ class Music:
         offset: int | None = None,
         order_by: str | None = None,
         provider: str | list[str] | None = None,
+        user: str | None = None,
     ) -> list[Track]:
         """Get Track listing from the server.
 
@@ -57,6 +60,8 @@ class Music:
         :param offset: Number of items to skip.
         :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
         :param provider: Filter by provider instance ID or domain (single string or list).
+        :param user: Optionally execute the request on behalf of this user (user_id or
+            username). Requires the authenticated client to have sufficient permissions.
         """
         return [
             Track.from_dict(obj)
@@ -68,6 +73,8 @@ class Music:
                 offset=offset,
                 order_by=order_by,
                 provider=provider,
+                user=user,
+                require_schema=35 if user else None,
             )
         ]
 
@@ -140,6 +147,7 @@ class Music:
         order_by: str | None = None,
         album_types: list[AlbumType] | None = None,
         provider: str | list[str] | None = None,
+        user: str | None = None,
     ) -> list[Album]:
         """Get Albums listing from the server.
 
@@ -150,6 +158,8 @@ class Music:
         :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
         :param album_types: Filter by album types.
         :param provider: Filter by provider instance ID or domain (single string or list).
+        :param user: Optionally execute the request on behalf of this user (user_id or
+            username). Requires the authenticated client to have sufficient permissions.
         """
         return [
             Album.from_dict(obj)
@@ -162,6 +172,8 @@ class Music:
                 order_by=order_by,
                 album_types=album_types,
                 provider=provider,
+                user=user,
+                require_schema=35 if user else None,
             )
         ]
 
@@ -222,6 +234,7 @@ class Music:
         order_by: str | None = None,
         album_artists_only: bool = False,
         provider: str | list[str] | None = None,
+        user: str | None = None,
     ) -> list[Artist]:
         """Get Artists listing from the server.
 
@@ -232,6 +245,8 @@ class Music:
         :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
         :param album_artists_only: Only return artists that have albums.
         :param provider: Filter by provider instance ID or domain (single string or list).
+        :param user: Optionally execute the request on behalf of this user (user_id or
+            username). Requires the authenticated client to have sufficient permissions.
         """
         return [
             Artist.from_dict(obj)
@@ -244,6 +259,8 @@ class Music:
                 order_by=order_by,
                 album_artists_only=album_artists_only,
                 provider=provider,
+                user=user,
+                require_schema=35 if user else None,
             )
         ]
 
@@ -305,6 +322,7 @@ class Music:
         offset: int | None = None,
         order_by: str | None = None,
         provider: str | list[str] | None = None,
+        user: str | None = None,
     ) -> list[Playlist]:
         """Get Playlists listing from the server.
 
@@ -314,6 +332,8 @@ class Music:
         :param offset: Number of items to skip.
         :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
         :param provider: Filter by provider instance ID or domain (single string or list).
+        :param user: Optionally execute the request on behalf of this user (user_id or
+            username). Requires the authenticated client to have sufficient permissions.
         """
         return [
             Playlist.from_dict(obj)
@@ -325,6 +345,8 @@ class Music:
                 offset=offset,
                 order_by=order_by,
                 provider=provider,
+                user=user,
+                require_schema=35 if user else None,
             )
         ]
 
@@ -403,6 +425,7 @@ class Music:
         offset: int | None = None,
         order_by: str | None = None,
         provider: str | list[str] | None = None,
+        user: str | None = None,
     ) -> list[Audiobook]:
         """Get Audiobooks listing from the server.
 
@@ -412,6 +435,8 @@ class Music:
         :param offset: Number of items to skip.
         :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
         :param provider: Filter by provider instance ID or domain (single string or list).
+        :param user: Optionally execute the request on behalf of this user (user_id or
+            username). Requires the authenticated client to have sufficient permissions.
         """
         return [
             Audiobook.from_dict(obj)
@@ -423,6 +448,8 @@ class Music:
                 offset=offset,
                 order_by=order_by,
                 provider=provider,
+                user=user,
+                require_schema=35 if user else None,
             )
         ]
 
@@ -450,6 +477,7 @@ class Music:
         offset: int | None = None,
         order_by: str | None = None,
         provider: str | list[str] | None = None,
+        user: str | None = None,
     ) -> list[Podcast]:
         """Get Podcasts listing from the server.
 
@@ -459,6 +487,8 @@ class Music:
         :param offset: Number of items to skip.
         :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
         :param provider: Filter by provider instance ID or domain (single string or list).
+        :param user: Optionally execute the request on behalf of this user (user_id or
+            username). Requires the authenticated client to have sufficient permissions.
         """
         return [
             Podcast.from_dict(obj)
@@ -470,6 +500,8 @@ class Music:
                 offset=offset,
                 order_by=order_by,
                 provider=provider,
+                user=user,
+                require_schema=35 if user else None,
             )
         ]
 
@@ -512,6 +544,7 @@ class Music:
         offset: int | None = None,
         order_by: str | None = None,
         provider: str | list[str] | None = None,
+        user: str | None = None,
     ) -> list[Radio]:
         """Get Radio listing from the server.
 
@@ -521,6 +554,8 @@ class Music:
         :param offset: Number of items to skip.
         :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
         :param provider: Filter by provider instance ID or domain (single string or list).
+        :param user: Optionally execute the request on behalf of this user (user_id or
+            username). Requires the authenticated client to have sufficient permissions.
         """
         return [
             Radio.from_dict(obj)
@@ -532,6 +567,8 @@ class Music:
                 offset=offset,
                 order_by=order_by,
                 provider=provider,
+                user=user,
+                require_schema=35 if user else None,
             )
         ]
 
@@ -584,12 +621,15 @@ class Music:
         media_types: list[MediaType] = MediaType.ALL,
         limit: int = 50,
         library_only: bool = False,
+        user: str | None = None,
     ) -> SearchResults:
         """Perform global search for media items on all providers.
 
         :param search_query: Search query.
         :param media_types: A list of media_types to include.
         :param limit: number of items to return in the search (per type).
+        :param user: Optionally execute the search on behalf of this user (user_id or
+            username). Requires the authenticated client to have sufficient permissions.
         """
         return SearchResults.from_dict(
             await self.client.send_command(
@@ -598,6 +638,8 @@ class Music:
                 media_types=media_types,
                 limit=limit,
                 library_only=library_only,
+                user=user,
+                require_schema=35 if user else None,
             ),
         )
 
@@ -676,21 +718,23 @@ class Music:
         """Get single music item providing a mediaitem uri."""
         return media_from_dict(await self.client.send_command("music/item_by_uri", uri=uri))
 
-    async def verify_item_uri(self, uri: str, username: str | None = None) -> bool:
+    async def verify_item_uri(
+        self, uri: str, user: str | None = None, username: str | None = None
+    ) -> bool:
         """
         Verify whether a uri points to a valid, accessible item.
 
-        :param username: Optionally verify access on behalf of this user (instead of the
-            user the client is authenticated as). Requires the authenticated client to have
-            sufficient permissions.
+        :param user: Optionally verify access on behalf of this user (user_id or username).
+            Requires the authenticated client to have sufficient permissions.
+        :param username: Deprecated alias for user.
         """
         return cast(
             "bool",
             await self.client.send_command(
                 "music/verify_item_uri",
                 uri=uri,
-                username=username,
                 require_schema=33,
+                **impersonation_arg(self.client.server_info, user or username),
             ),
         )
 
@@ -959,15 +1003,17 @@ class Music:
         artist: str | None = None,
         album: str | None = None,
         media_type: MediaType | None = None,
+        user: str | None = None,
         username: str | None = None,
     ) -> MediaItemType | ItemMapping | None:
         """
         Try to find a media item (such as a playlist) by name.
 
-        :param username: Optionally perform the lookup on behalf of this user (instead of the
-            user the client is authenticated as). Requires the authenticated client to have
-            sufficient permissions. Only honored by the native server lookup (schema >= 33);
-            the legacy fallback always runs as the authenticated user.
+        :param user: Optionally perform the lookup on behalf of this user (user_id or
+            username). Requires the authenticated client to have sufficient permissions.
+            Only honored by the native server lookup (schema >= 33); the legacy fallback
+            always runs as the authenticated user.
+        :param username: Deprecated alias for user.
         """
         assert self.client.server_info  # for type checking
         if self.client.server_info.schema_version >= 33:
@@ -978,7 +1024,7 @@ class Music:
                 artist=artist,
                 album=album,
                 media_type=media_type,
-                username=username,
+                **impersonation_arg(self.client.server_info, user or username),
             ):
                 return media_from_dict(result)
             return None
