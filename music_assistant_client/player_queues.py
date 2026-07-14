@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from collections.abc import Callable, Coroutine
+from typing import TYPE_CHECKING, Any
 
+from music_assistant_models.audio_processing import AudioProcessingChain
 from music_assistant_models.enums import EventType, QueueOption, RepeatMode
 from music_assistant_models.player_queue import PlayerQueue
 from music_assistant_models.queue_item import QueueItem
@@ -18,6 +20,12 @@ if TYPE_CHECKING:
     from music_assistant_models.media_items import ItemMapping, MediaItemType
 
     from .client import MusicAssistantClient
+
+
+AudioProcessingCallback = Callable[
+    [str, AudioProcessingChain | None],
+    Coroutine[Any, Any, None] | None,
+]
 
 
 def radio_playlist_uri(seed: MediaItemType | ItemMapping | str) -> str:
@@ -85,6 +93,37 @@ class PlayerQueues:
         if player := self.client.players.get(player_id):
             return self.get(player.active_source or player.player_id)
         return None
+
+    async def get_audio_processing_chain(self, queue_id: str) -> AudioProcessingChain | None:
+        """Return the current audio processing snapshot for a queue."""
+        result = await self.client.send_command(
+            "player_queues/audio_processing_chain",
+            queue_id=queue_id,
+            require_schema=38,
+        )
+        if result is None:
+            return None
+        return AudioProcessingChain.from_dict(result)
+
+    def subscribe_audio_processing(
+        self,
+        callback: AudioProcessingCallback,
+        queue_id: str | tuple[str, ...] | None = None,
+    ) -> Callable[[], None]:
+        """Subscribe to complete audio processing snapshots and clear events."""
+
+        async def handle_event(event: MassEvent) -> None:
+            assert event.object_id
+            chain = None if event.data is None else AudioProcessingChain.from_dict(event.data)
+            callback_result = callback(event.object_id, chain)
+            if callback_result is not None:
+                await callback_result
+
+        return self.client.subscribe(
+            handle_event,
+            EventType.AUDIO_PROCESSING_UPDATED,
+            queue_id,
+        )
 
     async def play(self, queue_id: str) -> None:
         """Send PLAY command to given queue."""
