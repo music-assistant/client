@@ -87,6 +87,9 @@ async def login(
             # Recent servers return the token under "token"; older servers used
             # "access_token". Accept either for backward compatibility.
             access_token = data.get("token", data.get("access_token"))
+            if access_token is None:
+                msg = "Login response did not contain an access token"
+                raise LoginFailed(msg)
 
             LOGGER.info("Successfully logged in as %s", username)
             return user, access_token
