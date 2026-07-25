@@ -18,11 +18,45 @@ jobs:
 
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up Python
-        uses: actions/setup-python@v6.3.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
+      - name: Validate workflow action pins
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path(".github/workflows")
+          pattern = re.compile(r"^\s*-\s*uses:\s*([^#\s]+)")
+          violations = []
+
+          for path in sorted(root.glob("*.yml")):
+              for line_number, line in enumerate(path.read_text().splitlines(), 1):
+                  if line.lstrip().startswith("#"):
+                      continue
+                  match = pattern.match(line)
+                  if not match:
+                      continue
+                  spec = match.group(1)
+                  if spec.startswith("./"):
+                      continue
+                  if "@" not in spec:
+                      violations.append(f"{path}:{line_number}: missing @: {spec}")
+                      continue
+                  ref = spec.rsplit("@", 1)[1]
+                  if not re.fullmatch(r"[0-9a-f]{40}", ref):
+                      violations.append(f"{path}:{line_number}: not pinned: {spec}")
+
+          if violations:
+              for violation in violations:
+                  print(violation)
+              raise SystemExit(1)
+
+          print("workflow action pins are SHA locked")
+          PY
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip build setuptools
