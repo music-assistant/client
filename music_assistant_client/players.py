@@ -412,8 +412,9 @@ class Players:
         )
 
     async def _get_players(self) -> list[Player]:
-        """Fetch all Players from the server."""
-        return [Player.from_dict(item) for item in await self.client.send_command("players/all")]
+        """Fetch all Players from the server, including protocol players exposed to clients."""
+        players = await self.client.send_command("players/all", return_protocol_players=True)
+        return [Player.from_dict(item) for item in players]
 
     async def fetch_state(self) -> None:
         """Fetch initial state once the server is connected."""
