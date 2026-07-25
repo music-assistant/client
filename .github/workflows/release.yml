@@ -16,11 +16,11 @@ jobs:
     outputs:
       version: ${{ steps.vars.outputs.tag }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Get tag
         id: vars
         run: >-
-          echo "tag=${GITHUB_REF#refs/*/}" >> $GITHUB_OUTPUT
+          echo "tag=${GITHUB_REF#refs/*/}" >> "$GITHUB_OUTPUT"
       - name: Validate version number
         run: >-
           if [[ "${{ github.event.release.prerelease }}" == "true" ]]; then
@@ -35,7 +35,7 @@ jobs:
             fi
           fi
       - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v6.3.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - name: Install build
@@ -58,18 +58,12 @@ jobs:
         run: >-
           python3 -m build
       - name: Upload distributions
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-dists
           path: dist/
       - name: Publish release to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.14.0
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
         with:
           user: __token__
           password: ${{ secrets.PYPI_TOKEN }}
-
-    # - name: Create Server + Client repo PR (TODO!)
-    #   uses: music-assistant/frontend-release-pr-action@main
-    #   with:
-    #     github_token: ${{ secrets.PRIVILEGED_GITHUB_TOKEN }}
-    #     new_release_version: ${{ env.version }}
