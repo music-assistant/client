@@ -6,9 +6,12 @@ import asyncio
 import base64
 from _collections_abc import dict_keys, dict_values
 from types import MethodType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 
 import orjson
+from music_assistant_models.auth import AuthProviderType
+
+from .exceptions import InvalidServerVersion
 
 if TYPE_CHECKING:
     from music_assistant_models.api import ServerInfoMessage
@@ -20,17 +23,50 @@ JSON_DECODE_EXCEPTIONS = (orjson.JSONDecodeError,)
 DO_NOT_SERIALIZE_TYPES = (MethodType, asyncio.Task)
 
 
-def impersonation_arg(server_info: ServerInfoMessage | None, user: str | None) -> dict[str, Any]:
+class LinkedUser(TypedDict):
+    """
+    Reference to a user by auth provider, as user argument of an API command.
+
+    A plain user_id/username string is shorthand for provider "builtin" with required True.
+    With required False, an unknown user softly resolves to no impersonation at all
+    (the command runs as the authenticated account) instead of erroring.
+    """
+
+    provider: str
+    user_id: str
+    required: NotRequired[bool]
+
+
+def impersonation_arg(
+    server_info: ServerInfoMessage | None,
+    user: str | LinkedUser | None,
+) -> dict[str, Any]:
     """
     Return the impersonation argument for an API command.
 
     :param server_info: The connected server's info (to determine the schema version).
-    :param user: The user_id or username of the user to impersonate (or None).
+    :param user: The user to impersonate (or None): a user_id or username string, or a
+        LinkedUser dict referencing the user by auth provider (server schema >= 44).
     """
-    if server_info is not None and server_info.schema_version >= 35:
-        return {"user": user}
+    schema_version = server_info.schema_version if server_info is not None else 0
+    plain_user: str | None
+    if isinstance(user, dict):
+        if schema_version >= 44:
+            return {"user": user}
+        if not user.get("required", True):
+            # older server: gracefully degrade soft impersonation to no impersonation
+            return {}
+        if user.get("provider") != AuthProviderType.BUILTIN:
+            raise InvalidServerVersion(
+                "Impersonating a user by auth provider requires api schema 44."
+            )
+        plain_user = user["user_id"]
+    else:
+        plain_user = user
+    if schema_version >= 35:
+        return {"user": plain_user}
     # older servers only accept the username argument on selected commands
-    return {"username": user}
+    return {"username": plain_user}
 
 
 def compact_media_item_dict(item: dict[str, Any]) -> dict[str, Any]:
