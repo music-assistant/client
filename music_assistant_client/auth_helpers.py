@@ -62,10 +62,17 @@ async def login(
         server_url = f"{server_url}/"
 
     try:
-        # Send login request
+        # Send login request.
+        # Recent servers (~API 2.8.4+) read credentials from a nested
+        # "credentials" object; older servers read the flat username/password
+        # fields. Send both shapes so the client works across server versions.
         async with session.post(
             f"{server_url}auth/login",
-            json={"username": username, "password": password},
+            json={
+                "username": username,
+                "password": password,
+                "credentials": {"username": username, "password": password},
+            },
         ) as response:
             if response.status == 401:
                 msg = "Invalid username or password"
@@ -77,7 +84,12 @@ async def login(
 
             data = await response.json()
             user = User.from_dict(data["user"])
-            access_token = data["access_token"]
+            # Recent servers return the token under "token"; older servers used
+            # "access_token". Accept either for backward compatibility.
+            access_token = data.get("token", data.get("access_token"))
+            if access_token is None:
+                msg = "Login response did not contain an access token"
+                raise LoginFailed(msg)
 
             LOGGER.info("Successfully logged in as %s", username)
             return user, access_token
