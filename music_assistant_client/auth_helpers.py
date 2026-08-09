@@ -65,7 +65,7 @@ async def login(
         # Send login request
         async with session.post(
             f"{server_url}auth/login",
-            json={"username": username, "password": password},
+            json={"credentials": {"username": username, "password": password}}
         ) as response:
             if response.status == 401:
                 msg = "Invalid username or password"
@@ -77,7 +77,7 @@ async def login(
 
             data = await response.json()
             user = User.from_dict(data["user"])
-            access_token = data["access_token"]
+            access_token = data["token"]
 
             LOGGER.info("Successfully logged in as %s", username)
             return user, access_token
