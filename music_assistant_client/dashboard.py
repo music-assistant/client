@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from music_assistant_models.dashboard import DashboardDevice, DashboardSession
 from music_assistant_models.enums import EventType
@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 
     from .client import MusicAssistantClient
 
-# the dashboard/* commands landed in the server api at schema 40
-DASHBOARD_SCHEMA_VERSION = 40
+# the dashboard/* commands landed in the server api at schema 39
+DASHBOARD_SCHEMA_VERSION = 39
 
 OnShowCallback = Callable[[DashboardSession], Awaitable[None] | None]
 OnHideCallback = Callable[[], Awaitable[None] | None]
@@ -73,9 +73,13 @@ class Dashboard:
         """
         Register this client as a dashboard endpoint.
 
+        The registration belongs to the current connection, so it must be repeated
+        after a reconnect.
+
         :param dashboard_id: Unique id chosen by the registering client.
         :param name: Display name for the dashboard endpoint.
-        :param supported_types: Dashboard types this endpoint can show, defaults to all.
+        :param supported_types: Dashboard types this endpoint can show, defaults to all
+            types; an explicitly empty set is rejected.
         :param provider_domain_hint: Optional provider domain used to resolve the endpoint's icon.
         :param on_show: Called with the DashboardSession when a show intent is received.
         :param on_hide: Called with no arguments when a hide intent is received.
@@ -93,13 +97,13 @@ class Dashboard:
 
     async def unregister(self, dashboard_id: str) -> None:
         """Unregister a dashboard endpoint, dropping any active session for it."""
-        self._on_show_callbacks.pop(dashboard_id, None)
-        self._on_hide_callbacks.pop(dashboard_id, None)
         await self.client.send_command(
             "dashboard/unregister",
             dashboard_id=dashboard_id,
             require_schema=DASHBOARD_SCHEMA_VERSION,
         )
+        self._on_show_callbacks.pop(dashboard_id, None)
+        self._on_hide_callbacks.pop(dashboard_id, None)
 
     async def show(
         self, dashboard_id: str, dashboard: DashboardType, player_id: str | None = None
@@ -149,12 +153,15 @@ class Dashboard:
         :param player_id: Player to show, required when dashboard is NOW_PLAYING.
         :param prefer_local: Return the plain local base url, for native LAN viewers.
         """
-        return await self.client.send_command(
-            "dashboard/get_url",
-            dashboard=dashboard,
-            player_id=player_id,
-            prefer_local=prefer_local,
-            require_schema=DASHBOARD_SCHEMA_VERSION,
+        return cast(
+            "str",
+            await self.client.send_command(
+                "dashboard/get_url",
+                dashboard=dashboard,
+                player_id=player_id,
+                prefer_local=prefer_local,
+                require_schema=DASHBOARD_SCHEMA_VERSION,
+            ),
         )
 
     async def fetch_state(self) -> None:
