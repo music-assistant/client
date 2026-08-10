@@ -62,6 +62,7 @@ Update the Python client controller files to match the current server API:
 Process these controller files in the client:
 - \`music_assistant_client/auth.py\` - handles \"Auth\" category
 - \`music_assistant_client/config.py\` - handles \"Config\" category
+- \`music_assistant_client/dashboard.py\` - handles \"Dashboard\" category
 - \`music_assistant_client/metadata.py\` - handles \"Metadata\" category
 - \`music_assistant_client/music.py\` - handles \"Music\" category
 - \`music_assistant_client/player_queues.py\` - handles \"Player Queues\" category
@@ -84,6 +85,8 @@ Skip these specific commands (they use cached data or are already handled):
 - \`players/get*\` - player retrieval uses cache
 - \`player_queues/all\` - player queues are cached locally
 - \`player_queues/get\` - already handled in code with special logic
+- \`dashboard/dashboards\` - dashboards are cached locally, fetched once via fetch_state
+- \`dashboard/sessions\` - dashboard sessions are cached locally, fetched once via fetch_state
 - Any command in ignored categories
 
 #### B. Generate Method Name from Command Path
