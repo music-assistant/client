@@ -23,7 +23,12 @@ from music_assistant_models.api import (
     parse_message,
 )
 from music_assistant_models.enums import EventType, ImageType
-from music_assistant_models.errors import ERROR_MAP, AuthenticationFailed, AuthenticationRequired
+from music_assistant_models.errors import (
+    ERROR_MAP,
+    AuthenticationFailed,
+    AuthenticationRequired,
+    MusicAssistantError,
+)
 from music_assistant_models.event import MassEvent
 from music_assistant_models.provider import ProviderInstance, ProviderManifest
 
@@ -343,7 +348,8 @@ class MusicAssistantClient:
                         return partial_result
                     return response.result
                 if isinstance(response, ErrorResultMessage):
-                    exc = ERROR_MAP[response.error_code]
+                    # unknown codes (newer server) degrade to the generic error
+                    exc = ERROR_MAP.get(response.error_code, MusicAssistantError)
                     raise exc(response.details)
 
         # Normal path when start_listening is running
@@ -478,7 +484,8 @@ class MusicAssistantClient:
                 return
             if isinstance(msg, ErrorResultMessage):
                 self._partial_results.pop(msg.message_id, None)
-                exc = ERROR_MAP[msg.error_code]
+                # unknown codes (newer server) degrade to the generic error
+                exc = ERROR_MAP.get(msg.error_code, MusicAssistantError)
                 future.set_exception(exc(msg.details))
                 return
 
