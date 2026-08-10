@@ -43,6 +43,7 @@ from .player_queues import PlayerQueues
 from .players import Players
 
 if TYPE_CHECKING:
+    from concurrent.futures import Future
     from types import TracebackType
 
     from aiohttp import ClientSession
@@ -518,9 +519,17 @@ class MusicAssistantClient:
             if not (id_filter is None or event.object_id in id_filter):
                 continue
             if inspect.iscoroutinefunction(cb_func):
-                asyncio.run_coroutine_threadsafe(cb_func(event), self._loop)
+                task = asyncio.run_coroutine_threadsafe(cb_func(event), self._loop)
+                task.add_done_callback(self._log_subscriber_error)
             else:
                 self._loop.call_soon_threadsafe(cb_func, event)
+
+    def _log_subscriber_error(self, future: Future[None]) -> None:
+        """Log an exception raised by an async subscriber callback."""
+        if future.cancelled():
+            return
+        if (err := future.exception()) is not None:
+            self.logger.error("Error in event subscriber callback", exc_info=err)
 
     async def __aenter__(self) -> Self:
         """Initialize and connect the connection to the Music Assistant Server."""
