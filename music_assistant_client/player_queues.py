@@ -314,7 +314,7 @@ class PlayerQueues:
     queue_command_pause = pause
     queue_command_stop = stop
     queue_command_resume = resume
-    queue_command_next = next
+    queue_command_next = next  # noqa: A003
     queue_command_previous = previous
     queue_command_clear = clear
     queue_command_move_item = move_item

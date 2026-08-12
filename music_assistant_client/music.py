@@ -938,7 +938,7 @@ class Music:
         for splitter in ("•", "-", "|", "(", "["):
             if splitter in track_name:
                 return await self.get_track_by_name(
-                    track_name=track_name.split(splitter)[0].strip(),
+                    track_name=track_name.split(splitter, maxsplit=1)[0].strip(),
                     artist_name=artist_name,
                     album_name=None,
                     track_version=track_version,
