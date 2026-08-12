@@ -12,15 +12,64 @@ on:
       - main
 
 jobs:
+  workflow-pins:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code from GitHub
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Validate pinned GitHub Actions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          files = set()
+          for root in (Path(".github/workflows"), Path(".github")):
+              if root.exists():
+                  files.update(path for path in root.rglob("*.yml") if path.is_file())
+                  files.update(path for path in root.rglob("*.yaml") if path.is_file())
+
+          pattern = re.compile(r"^\s*(?:-\s*)?uses:\s*([^#\s]+)(?:\s+#\s*(.+))?$")
+          failures = []
+
+          for path in sorted(files):
+              for lineno, line in enumerate(path.read_text().splitlines(), 1):
+                  match = pattern.match(line)
+                  if not match:
+                      continue
+
+                  uses = match.group(1)
+                  if uses.startswith("./") or uses.startswith("../") or uses.startswith("docker://"):
+                      continue
+                  if "@" not in uses:
+                      failures.append(f"{path}:{lineno}: external action is not pinned: {uses}")
+                      continue
+
+                  ref = uses.rsplit("@", 1)[1]
+                  if not re.fullmatch(r"[0-9a-f]{40}", ref):
+                      failures.append(f"{path}:{lineno}: external action ref is not a full SHA: {uses}")
+                      continue
+
+                  comment = match.group(2) or ""
+                  if not re.search(r"\bv\d", comment):
+                      failures.append(f"{path}:{lineno}: SHA pin is missing a version comment: {uses}")
+
+          if failures:
+              print("\n".join(failures))
+              sys.exit(1)
+          PY
+
   lint:
     runs-on: ubuntu-latest
     continue-on-error: true
 
     steps:
       - name: Check out code from GitHub
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up Python
-        uses: actions/setup-python@v6.3.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.12"
       - name: Install dependencies
