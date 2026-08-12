@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/music-assistant/client/compare/v1.4.3...v1.5.0) (2026-08-12)
+
+
+### Miscellaneous Chores
+
+* release 1.5.0 ([fa60bf1](https://github.com/music-assistant/client/commit/fa60bf136da02e7b127e2a562946477e58a775e7))
+
 ## [1.4.2](https://github.com/music-assistant/client/compare/v1.4.1...v1.4.2) (2026-07-03)
 
 
