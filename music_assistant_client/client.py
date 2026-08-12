@@ -36,6 +36,7 @@ from .auth import Auth
 from .config import Config
 from .connection import WebsocketsConnection
 from .constants import API_SCHEMA_VERSION
+from .dashboard import Dashboard
 from .exceptions import ConnectionClosed, InvalidServerVersion, InvalidState
 from .metadata import Metadata
 from .music import Music
@@ -95,6 +96,7 @@ class MusicAssistantClient:
         self._player_queues = PlayerQueues(self)
         self._music = Music(self)
         self._metadata = Metadata(self)
+        self._dashboard = Dashboard(self)
         # below items are retrieved after connect
         self._server_info: ServerInfoMessage | None = None
         self._provider_manifests: dict[str, ProviderManifest] = {}
@@ -144,6 +146,11 @@ class MusicAssistantClient:
     def metadata(self) -> Metadata:
         """Return Metadata handler."""
         return self._metadata
+
+    @property
+    def dashboard(self) -> Dashboard:
+        """Return Dashboard handler."""
+        return self._dashboard
 
     def get_provider_manifest(self, domain: str) -> ProviderManifest:
         """Return Provider manifests of single provider(domain)."""
@@ -429,6 +436,7 @@ class MusicAssistantClient:
             }
             await self._player_queues.fetch_state()
             await self._players.fetch_state()
+            await self._dashboard.fetch_state()
 
             if init_ready is not None:
                 init_ready.set()
