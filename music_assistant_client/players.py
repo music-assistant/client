@@ -190,19 +190,31 @@ class Players:
     async def play_announcement(
         self,
         player_id: str,
-        url: str,
+        url: str | None = None,
         pre_announce: bool | None = None,
         volume_level: int | None = None,
         pre_announce_url: str | None = None,
+        message: str | None = None,
+        tts_engine: str | None = None,
     ) -> None:
-        """Handle playback of an announcement (url) on given player."""
+        """
+        Handle playback of an announcement on given player.
+
+        Provide either a url to play or a message to speak, not both. Speaking a message
+        requires a server with api schema 46 or higher.
+        """
         await self.client.send_command(
             "players/cmd/play_announcement",
+            # speaking a message is only understood by a newer server; a url-only
+            # announcement must keep working against every supported server
+            require_schema=46 if message or tts_engine else None,
             player_id=player_id,
             url=url,
             pre_announce=pre_announce,
             volume_level=volume_level,
             pre_announce_url=pre_announce_url,
+            message=message,
+            tts_engine=tts_engine,
         )
 
     #  PlayerGroup related endpoints/commands
