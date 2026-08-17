@@ -27,6 +27,11 @@ test = [
   "ruff==0.15.10",
 ]
 
+[project.urls]
+"Homepage" = "https://www.music-assistant.io"
+"Issue Tracker" = "https://github.com/music-assistant/support/issues"
+"Repository" = "https://github.com/music-assistant/client"
+
 [tool.setuptools]
 include-package-data = true
 packages = ["music_assistant_client"]
