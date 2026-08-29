@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from music_assistant_models.enums import EventType, MediaType
@@ -422,6 +423,26 @@ class Players:
             "players/remove_group_player",
             player_id=player_id,
         )
+
+    async def set_sleep_timer(self, player_id: str, seconds: int) -> datetime:
+        """Set a sleep timer for the player."""
+        expiry = await self.client.send_command(
+            "players/sleep_timer/set", player_id=player_id, seconds=seconds
+        )
+        return datetime.fromtimestamp(expiry, tz=timezone.utc)
+
+    async def get_sleep_timer(self, player_id: str) -> datetime | None:
+        """Return the active sleep timer expiry for the player."""
+        expiry = await self.client.send_command(
+            "players/sleep_timer/get", player_id=player_id
+        )
+        if expiry is None:
+            return None
+        return datetime.fromtimestamp(expiry, tz=timezone.utc)
+
+    async def clear_sleep_timer(self, player_id: str) -> None:
+        """Clear the active sleep timer for the player."""
+        await self.client.send_command("players/sleep_timer/clear", player_id=player_id)
 
     async def _get_players(self) -> list[Player]:
         """Fetch all Players from the server."""
