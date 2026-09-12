@@ -4,15 +4,15 @@ authors = [
 ]
 classifiers = [
   "Environment :: Console",
-  "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
 ]
 dependencies = ["aiohttp>=3.8.6", "music_assistant_models==1.1.199", "orjson>=3.9"]
 description = "Music Assistant Client"
 license = {text = "Apache-2.0"}
 name = "music_assistant_client"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 # The version is set by GH action on release
 version = "0.0.0"
 
@@ -46,7 +46,7 @@ fix = true
 show-fixes = true
 
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint.pydocstyle]
 # Use Google-style docstrings.
