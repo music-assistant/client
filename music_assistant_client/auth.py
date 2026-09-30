@@ -140,7 +140,8 @@ class Auth:
             display_name: New display name (optional)
             avatar_url: New avatar URL (optional)
             password: New password (optional, minimum 8 characters)
-            role: New role - "admin" or "user" (optional, admin only)
+            role: New role id - a builtin role (admin, user, guest, service)
+                or the id of a custom role (optional, admin only)
             preferences: User preferences dict (completely replaces existing, optional)
             player_filter: List of player IDs the user has access to (admin only, optional)
             provider_filter: List of provider instance IDs the user has access to
