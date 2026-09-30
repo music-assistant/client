@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import inspect
 import logging
 import urllib.parse
@@ -22,7 +24,7 @@ from music_assistant_models.api import (
     SuccessResultMessage,
     parse_message,
 )
-from music_assistant_models.enums import EventType, ImageType
+from music_assistant_models.enums import EventType, ImageType, ProviderIconVariant
 from music_assistant_models.errors import (
     ERROR_MAP,
     AuthenticationFailed,
@@ -216,6 +218,28 @@ class MusicAssistantClient:
         if img := self.music.get_media_item_image(item, type):
             return self.get_image_url(img, size)
         return None
+
+    async def get_provider_icon(
+        self, provider: str, variant: ProviderIconVariant = ProviderIconVariant.DEFAULT
+    ) -> tuple[bytes, str] | None:
+        """
+        Return a provider's icon as (image data, content type), or None if it has no icon.
+
+        :param provider: A provider domain or instance id.
+        :param variant: Which icon variant to return.
+        """
+        data_uri: str | None = await self.send_command(
+            "providers/icon",
+            provider=provider,
+            variant=variant,
+            # added mid 2.10 dev cycle; 39 is the first schema that guarantees the command
+            require_schema=39,
+        )
+        if data_uri is None:
+            return None
+        if (icon := _decode_data_uri(data_uri)) is None:
+            self.logger.debug("Ignoring malformed icon data for provider %s", provider)
+        return icon
 
     def subscribe(
         self,
@@ -559,3 +583,17 @@ class MusicAssistantClient:
         conn_type = self.connection.__class__.__name__
         prefix = "" if self.connection.connected else "not "
         return f"{type(self).__name__}(connection={conn_type}, {prefix}connected)"
+
+
+def _decode_data_uri(data_uri: str) -> tuple[bytes, str] | None:
+    """Decode a base64 data URI into (data, content type), or None if it is malformed."""
+    if not data_uri.startswith("data:"):
+        return None
+    header, separator, payload = data_uri.removeprefix("data:").partition(",")
+    content_type = header.removesuffix(";base64")
+    if not separator or content_type == header or not content_type:
+        return None
+    try:
+        return base64.b64decode(payload, validate=True), content_type
+    except binascii.Error:
+        return None
