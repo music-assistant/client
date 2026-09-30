@@ -621,15 +621,16 @@ class Music:
         media_types: list[MediaType] = MediaType.ALL,
         limit: int = 50,
         library_only: bool = False,
-        user: str | None = None,
+        user: str | LinkedUser | None = None,
     ) -> SearchResults:
         """Perform global search for media items on all providers.
 
         :param search_query: Search query.
         :param media_types: A list of media_types to include.
         :param limit: number of items to return in the search (per type).
-        :param user: Optionally execute the search on behalf of this user (user_id or
-            username). Requires the authenticated client to have sufficient permissions.
+        :param user: Optionally execute the search on behalf of this user: a user_id or
+            username string, or a LinkedUser reference by auth provider.
+            Requires the authenticated client to have sufficient permissions.
         """
         return SearchResults.from_dict(
             await self.client.send_command(
@@ -638,8 +639,7 @@ class Music:
                 media_types=media_types,
                 limit=limit,
                 library_only=library_only,
-                user=user,
-                require_schema=35 if user else None,
+                **impersonation_arg(self.client.server_info, user),
             ),
         )
 
