@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.0](https://github.com/music-assistant/client/compare/v1.5.1...v1.6.0) (2026-09-30)
+
+
+### Features
+
+* accept a LinkedUser reference in music.search ([ae9336b](https://github.com/music-assistant/client/commit/ae9336b5a151a294c1350e89fa8f0e2f548972ad))
+* add get_provider_icon helper ([6da8b50](https://github.com/music-assistant/client/commit/6da8b50017c760cb564d07a2f57aad06a3e998c4))
+* add player sleep timer methods ([23181a7](https://github.com/music-assistant/client/commit/23181a75e317fa0f64f9ada9b18bf0cf094efd3c))
+
 ## [1.5.1](https://github.com/music-assistant/client/compare/v1.5.0...v1.5.1) (2026-08-17)
 
 
