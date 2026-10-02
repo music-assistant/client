@@ -108,7 +108,7 @@ Use these naming conventions:
 - \`music/tracks/similar_tracks\` → \`similar_tracks\` (no prefix)
 - \`music/podcasts/podcast_episode\` → \`podcast_episode\` (singular)
 - \`music/tracks/get_by_external_id\` → \`get_track_by_external_id\`
-- \`music/tracks/get_collection\` → \`get_track_collection\`
+- \`music/audiobooks/get_collection\` → \`get_audiobook_collection\`
 - \`music/artists/top_tracks\` → \`get_artist_top_tracks\` (like get_artist_tracks)
 - \`music/genres/add_alias\` → \`add_genre_alias\` (action_singular_rest)
 
@@ -184,7 +184,8 @@ async def count_method(self) -> int:
      fills missing/None args with its own default, so the client does not duplicate defaults
    - When adding parameters to an existing method, append them at the end so positional
      callers keep working
-   - Skip parameters the server never resolves from the API (e.g. \`return_type: type[...]\`)
+   - When widening a parameter type, keep the types it already accepted (\`list\` is invariant:
+     \`list[A | B]\` does not accept a \`list[A]\`)
 
 2. **Return Type Handling:**
    - Simple types (\`str\`, \`bool\`, \`int\`, \`float\`, \`dict\`) → return as-is
@@ -198,6 +199,8 @@ async def count_method(self) -> int:
    - Generic \`ItemCls\` in the base media controller → the concrete model per media type.
    - \`X | None\` → \`X.from_dict(result) if result else None\`.
    - Unions of models (e.g. \`list[ConfigEntry] | ConfigActionResult\`) → check \`isinstance(result, list)\`.
+   - When a flag widens the return type (e.g. \`collapse_collections\`), add \`@overload\`s so the
+     default call keeps its old return type.
 
    Examples:
    \`\`\`python
@@ -256,8 +259,7 @@ For each command:
 After processing all API commands for a controller:
 1. Find methods in the file that have \`send_command()\` calls
 2. Extract their command paths
-3. If a command path doesn't exist in the current API (and isn't in the skip list), remove the method.
-   Commands registered with \`alias=True\` are hidden from the docs and count as obsolete.
+3. If a command path doesn't exist in the current API (and isn't in the skip list), remove the method
 4. Print: \`✓ Removed: method_name (was: command/path)\`
 
 ### Step 4: Import Management
