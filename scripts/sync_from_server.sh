@@ -88,6 +88,9 @@ Skip these specific commands (they use cached data or are already handled):
 - \`player_queues/get\` - already handled in code with special logic
 - \`dashboard/dashboards\` - dashboards are cached locally, fetched once via fetch_state
 - \`dashboard/sessions\` - dashboard sessions are cached locally, fetched once via fetch_state
+- \`music/*/get_collection\` except \`music/audiobooks/get_collection\` - registered for every
+  media type by the base controller, but only audiobooks have collections (series). For the
+  same reason \`collapse_collections\` is only exposed on audiobook listings.
 - Any command in ignored categories
 
 #### B. Generate Method Name from Command Path

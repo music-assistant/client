@@ -2408,7 +2408,7 @@ class Music:
             await self.client.send_command("music/genres/scanner_status", require_schema=84),
         )
 
-    # Lookup by external id and collections
+    # Lookup by external id and audiobook collections
 
     async def get_track_by_external_id(
         self, external_id: str, external_id_type: ExternalID | None = None
@@ -2422,16 +2422,6 @@ class Music:
         )
         return Track.from_dict(result) if result else None
 
-    async def get_track_collection(self, item_id: str) -> MediaCollection[Track]:
-        """Get a single track collection."""
-        return MediaCollection.from_dict(
-            await self.client.send_command(
-                "music/tracks/get_collection",
-                item_id=item_id,
-                require_schema=84,
-            )
-        )
-
     async def get_album_by_external_id(
         self, external_id: str, external_id_type: ExternalID | None = None
     ) -> Album | None:
@@ -2443,16 +2433,6 @@ class Music:
             require_schema=84,
         )
         return Album.from_dict(result) if result else None
-
-    async def get_album_collection(self, item_id: str) -> MediaCollection[Album]:
-        """Get a single album collection."""
-        return MediaCollection.from_dict(
-            await self.client.send_command(
-                "music/albums/get_collection",
-                item_id=item_id,
-                require_schema=84,
-            )
-        )
 
     async def get_artist_by_external_id(
         self, external_id: str, external_id_type: ExternalID | None = None
@@ -2466,16 +2446,6 @@ class Music:
         )
         return Artist.from_dict(result) if result else None
 
-    async def get_artist_collection(self, item_id: str) -> MediaCollection[Artist]:
-        """Get a single artist collection."""
-        return MediaCollection.from_dict(
-            await self.client.send_command(
-                "music/artists/get_collection",
-                item_id=item_id,
-                require_schema=84,
-            )
-        )
-
     async def get_playlist_by_external_id(
         self, external_id: str, external_id_type: ExternalID | None = None
     ) -> Playlist | None:
@@ -2488,16 +2458,6 @@ class Music:
         )
         return Playlist.from_dict(result) if result else None
 
-    async def get_playlist_collection(self, item_id: str) -> MediaCollection[Playlist]:
-        """Get a single playlist collection."""
-        return MediaCollection.from_dict(
-            await self.client.send_command(
-                "music/playlists/get_collection",
-                item_id=item_id,
-                require_schema=84,
-            )
-        )
-
     async def get_radio_by_external_id(
         self, external_id: str, external_id_type: ExternalID | None = None
     ) -> Radio | None:
@@ -2509,16 +2469,6 @@ class Music:
             require_schema=84,
         )
         return Radio.from_dict(result) if result else None
-
-    async def get_radio_collection(self, item_id: str) -> MediaCollection[Radio]:
-        """Get a single radio collection."""
-        return MediaCollection.from_dict(
-            await self.client.send_command(
-                "music/radios/get_collection",
-                item_id=item_id,
-                require_schema=84,
-            )
-        )
 
     async def get_audiobook_by_external_id(
         self, external_id: str, external_id_type: ExternalID | None = None
@@ -2554,16 +2504,6 @@ class Music:
         )
         return Podcast.from_dict(result) if result else None
 
-    async def get_podcast_collection(self, item_id: str) -> MediaCollection[Podcast]:
-        """Get a single podcast collection."""
-        return MediaCollection.from_dict(
-            await self.client.send_command(
-                "music/podcasts/get_collection",
-                item_id=item_id,
-                require_schema=84,
-            )
-        )
-
     async def get_genre_by_external_id(
         self, external_id: str, external_id_type: ExternalID | None = None
     ) -> Genre | None:
@@ -2575,13 +2515,3 @@ class Music:
             require_schema=84,
         )
         return Genre.from_dict(result) if result else None
-
-    async def get_genre_collection(self, item_id: str) -> MediaCollection[Genre]:
-        """Get a single genre collection."""
-        return MediaCollection.from_dict(
-            await self.client.send_command(
-                "music/genres/get_collection",
-                item_id=item_id,
-                require_schema=84,
-            )
-        )
