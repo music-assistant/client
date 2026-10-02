@@ -389,6 +389,9 @@ The server generates API documentation automatically from Python function signat
 Not every command uses the decorator: the media controllers register theirs with
 \`self.mass.register_api_command(...)\`, the shared ones in \`controllers/music/media/base.py\`
 via \`f\"music/{api_base}/...\"\`. Resolve the handler through the class hierarchy.
+Commands registered with \`allow_impersonation=True\` accept an extra \`user\` argument (user_id,
+username or LinkedUser dict) that is in neither the handler signature nor the API docs. Give those
+methods a \`user: str | LinkedUser | None = None\` parameter, like the existing library listings.
 
 If you really have questions about the task because something is unclear, ask for clarification before proceeding.
 Then also adjust the instructions in this file accordingly for future runs.

@@ -2061,6 +2061,7 @@ class Music:
         offset: int | None = None,
         order_by: str | None = None,
         provider: str | list[str] | None = None,
+        user: str | LinkedUser | None = None,
         played_only: bool | None = None,
         hide_empty: bool | None = None,
         media_type: MediaType | None = None,
@@ -2070,6 +2071,9 @@ class Music:
         """
         Get genres in the library.
 
+        :param user: Optionally execute the request on behalf of this user: a user_id or
+            username string, or a LinkedUser reference by auth provider.
+            Requires the authenticated client to have sufficient permissions.
         :param hide_empty: Only applies when media_type is not set. True: only genres with
             at least one media mapping, False: all genres, None: only default genres.
         :param media_type: Return all genres with at least one mapping for this media type.
@@ -2086,6 +2090,7 @@ class Music:
                 offset=offset,
                 order_by=order_by,
                 provider=provider,
+                user=user,
                 played_only=played_only,
                 hide_empty=hide_empty,
                 media_type=media_type,
@@ -2482,12 +2487,21 @@ class Music:
         )
         return Audiobook.from_dict(result) if result else None
 
-    async def get_audiobook_collection(self, item_id: str) -> MediaCollection[Audiobook]:
-        """Get a single audiobook collection."""
+    async def get_audiobook_collection(
+        self, item_id: str, user: str | LinkedUser | None = None
+    ) -> MediaCollection[Audiobook]:
+        """
+        Get a single audiobook collection.
+
+        :param user: Optionally execute the request on behalf of this user: a user_id or
+            username string, or a LinkedUser reference by auth provider.
+            Requires the authenticated client to have sufficient permissions.
+        """
         return MediaCollection.from_dict(
             await self.client.send_command(
                 "music/audiobooks/get_collection",
                 item_id=item_id,
+                user=user,
                 require_schema=84,
             )
         )
