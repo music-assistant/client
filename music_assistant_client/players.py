@@ -6,13 +6,13 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from music_assistant_models.enums import EventType, MediaType
+from music_assistant_models.enums import EventType, MediaType, RepeatMode
 from music_assistant_models.errors import (
     MusicAssistantError,
     PlayerCommandFailed,
     PlayerUnavailableError,
 )
-from music_assistant_models.player import Player, PlayerMedia, PlayerOptionValueType, PlayerSource
+from music_assistant_models.player import Player, PlayerMedia, PlayerOptionValueType
 from music_assistant_models.player_control import PlayerControl
 
 if TYPE_CHECKING:
@@ -114,7 +114,7 @@ class Players:
         """Handle PREVIOUS TRACK command for given player."""
         await self.client.send_command("players/cmd/previous", player_id=player_id)
 
-    async def select_source(self, player_id: str, source: str) -> None:
+    async def select_source(self, player_id: str, source: str | None) -> None:
         """
         Handle SELECT SOURCE command on given player.
 
@@ -197,12 +197,14 @@ class Players:
         pre_announce_url: str | None = None,
         message: str | None = None,
         tts_engine: str | None = None,
+        language: str | None = None,
     ) -> None:
         """
         Handle playback of an announcement on given player.
 
         Provide either a url to play or a message to speak, not both. Speaking a message
         requires a server with api schema 46 or higher.
+        - language: Optional language code to speak the message in (e.g. 'nl-NL').
         """
         await self.client.send_command(
             "players/cmd/play_announcement",
@@ -216,6 +218,48 @@ class Players:
             pre_announce_url=pre_announce_url,
             message=message,
             tts_engine=tts_engine,
+            language=language,
+        )
+
+    async def tts_engines(self) -> list[dict[str, str]]:
+        """Return the TTS engines that can speak an announcement."""
+        result: list[dict[str, str]] = await self.client.send_command(
+            "players/tts_engines", require_schema=84
+        )
+        return result
+
+    async def repeat(
+        self, player_id: str, repeat_mode: RepeatMode, source_id: str | None = None
+    ) -> None:
+        """
+        Handle REPEAT command for given player, applies to whatever the player is playing.
+
+        - source_id: Optional source (id) the command is aimed at, as listed in the
+          player's source_list. The command is refused when that source is no longer playing.
+        """
+        await self.client.send_command(
+            "players/cmd/repeat",
+            player_id=player_id,
+            repeat_mode=repeat_mode,
+            source_id=source_id,
+            require_schema=84,
+        )
+
+    async def shuffle(
+        self, player_id: str, shuffle_enabled: bool, source_id: str | None = None
+    ) -> None:
+        """
+        Handle SHUFFLE command for given player, applies to whatever the player is playing.
+
+        - source_id: Optional source (id) the command is aimed at, as listed in the
+          player's source_list. The command is refused when that source is no longer playing.
+        """
+        await self.client.send_command(
+            "players/cmd/shuffle",
+            player_id=player_id,
+            shuffle_enabled=shuffle_enabled,
+            source_id=source_id,
+            require_schema=84,
         )
 
     #  PlayerGroup related endpoints/commands
@@ -239,6 +283,15 @@ class Players:
     async def group_volume_down(self, player_id: str) -> None:
         """Send VOLUME_DOWN command to given playergroup."""
         await self.client.send_command("players/cmd/group_volume_down", player_id=player_id)
+
+    async def group_volume_mute(self, player_id: str, muted: bool) -> None:
+        """Handle muting a playergroup (or synced players) as a whole."""
+        await self.client.send_command(
+            "players/cmd/group_volume_mute",
+            player_id=player_id,
+            muted=muted,
+            require_schema=84,
+        )
 
     async def add_currently_playing_to_favorites(self, player_id: str) -> None:
         """
@@ -365,23 +418,15 @@ class Players:
             )
         )
 
-    async def get_by_name(self, name: str) -> Player:
+    async def get_by_name(self, name: str) -> Player | None:
         """Return PlayerState by name."""
-        return Player.from_dict(
-            await self.client.send_command(
-                "players/get_by_name",
-                name=name,
-            )
-        )
+        result = await self.client.send_command("players/get_by_name", name=name)
+        return Player.from_dict(result) if result else None
 
-    async def player_control(self, control_id: str) -> PlayerControl:
+    async def player_control(self, control_id: str) -> PlayerControl | None:
         """Return PlayerControl by control_id."""
-        return PlayerControl.from_dict(
-            await self.client.send_command(
-                "players/player_control",
-                control_id=control_id,
-            )
-        )
+        result = await self.client.send_command("players/player_control", control_id=control_id)
+        return PlayerControl.from_dict(result) if result else None
 
     async def player_controls(self) -> list[PlayerControl]:
         """Return all registered playercontrols."""
@@ -389,24 +434,6 @@ class Players:
             PlayerControl.from_dict(item)
             for item in await self.client.send_command(
                 "players/player_controls",
-            )
-        ]
-
-    async def plugin_source(self, source_id: str) -> PlayerSource:
-        """Return PluginSource by source_id."""
-        return PlayerSource.from_dict(
-            await self.client.send_command(
-                "players/plugin_source",
-                source_id=source_id,
-            )
-        )
-
-    async def plugin_sources(self) -> list[PlayerSource]:
-        """Return all available plugin sources."""
-        return [
-            PlayerSource.from_dict(item)
-            for item in await self.client.send_command(
-                "players/plugin_sources",
             )
         ]
 
