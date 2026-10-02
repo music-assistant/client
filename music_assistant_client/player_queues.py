@@ -211,7 +211,12 @@ class PlayerQueues:
     async def play_media(
         self,
         queue_id: str,
-        media: MediaItemType | ItemMapping | str | list[MediaItemType | ItemMapping | str],
+        media: MediaItemType
+        | ItemMapping
+        | str
+        | list[MediaItemType]
+        | list[str]
+        | list[MediaItemType | ItemMapping | str],
         option: QueueOption | None = None,
         radio_mode: bool = False,
         start_item: PlayableMediaItemType | str | None = None,

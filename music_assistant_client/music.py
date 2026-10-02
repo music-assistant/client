@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import urllib.parse
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast, overload
 
 from music_assistant_models.background_task import BackgroundTask
 from music_assistant_models.enums import (
@@ -438,12 +438,35 @@ class Music:
             )
         ]
 
+    @overload
+    async def get_artist_audiobooks(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        artist_type: ArtistType = ...,
+        in_library_only: bool = ...,
+        *,
+        collapse_collections: Literal[False] = False,
+    ) -> list[Audiobook]: ...
+
+    @overload
+    async def get_artist_audiobooks(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        artist_type: ArtistType = ...,
+        in_library_only: bool = ...,
+        *,
+        collapse_collections: bool,
+    ) -> list[Audiobook] | list[Audiobook | MediaCollection[Audiobook]]: ...
+
     async def get_artist_audiobooks(
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
         artist_type: ArtistType = ArtistType.AUTHOR,
         in_library_only: bool = False,
+        *,
         collapse_collections: bool = False,
     ) -> list[Audiobook] | list[Audiobook | MediaCollection[Audiobook]]:
         """
@@ -733,6 +756,42 @@ class Music:
 
     # Audiobooks related endpoints/commands
 
+    @overload
+    async def get_library_audiobooks(
+        self,
+        favorite: bool | None = ...,
+        search: str | None = ...,
+        limit: int | None = ...,
+        offset: int | None = ...,
+        order_by: str | None = ...,
+        provider: str | list[str] | None = ...,
+        user: str | None = ...,
+        genre: int | list[int] | None = ...,
+        played_only: bool | None = ...,
+        summary: bool | None = ...,
+        reachable_via: list[str] | None = ...,
+        *,
+        collapse_collections: Literal[False] = False,
+    ) -> list[Audiobook]: ...
+
+    @overload
+    async def get_library_audiobooks(
+        self,
+        favorite: bool | None = ...,
+        search: str | None = ...,
+        limit: int | None = ...,
+        offset: int | None = ...,
+        order_by: str | None = ...,
+        provider: str | list[str] | None = ...,
+        user: str | None = ...,
+        genre: int | list[int] | None = ...,
+        played_only: bool | None = ...,
+        summary: bool | None = ...,
+        reachable_via: list[str] | None = ...,
+        *,
+        collapse_collections: bool,
+    ) -> list[Audiobook] | list[Audiobook | MediaCollection[Audiobook]]: ...
+
     async def get_library_audiobooks(  # noqa: PLR0913, PLR0917
         self,
         favorite: bool | None = None,
@@ -746,6 +805,7 @@ class Music:
         played_only: bool | None = None,
         summary: bool | None = None,
         reachable_via: list[str] | None = None,
+        *,
         collapse_collections: bool = False,
     ) -> list[Audiobook] | list[Audiobook | MediaCollection[Audiobook]]:
         """Get Audiobooks listing from the server.
