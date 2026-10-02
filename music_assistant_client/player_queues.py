@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
+from music_assistant_models.background_task import BackgroundTask
 from music_assistant_models.enums import EventType, QueueOption, RepeatMode
 from music_assistant_models.player_queue import PlayerQueue
 from music_assistant_models.queue_item import QueueItem
@@ -15,7 +16,11 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from music_assistant_models.event import MassEvent
-    from music_assistant_models.media_items import ItemMapping, MediaItemType
+    from music_assistant_models.media_items import (
+        ItemMapping,
+        MediaItemType,
+        PlayableMediaItemType,
+    )
 
     from .client import MusicAssistantClient
 
@@ -113,9 +118,11 @@ class PlayerQueues:
         """Send PREVIOUS TRACK command to given queue."""
         await self.client.send_command("player_queues/previous", queue_id=queue_id)
 
-    async def clear(self, queue_id: str) -> None:
-        """Send CLEAR QUEUE command to given queue."""
-        await self.client.send_command("player_queues/clear", queue_id=queue_id)
+    async def clear(self, queue_id: str, skip_stop: bool = False) -> None:
+        """Send CLEAR QUEUE command to given queue, switching shuffle off with it."""
+        await self.client.send_command(
+            "player_queues/clear", queue_id=queue_id, skip_stop=skip_stop
+        )
 
     async def move_item(self, queue_id: str, queue_item_id: str, pos_shift: int = 1) -> None:
         """
@@ -164,7 +171,7 @@ class PlayerQueues:
         """
         await self.client.send_command("player_queues/seek", queue_id=queue_id, position=position)
 
-    async def skip(self, queue_id: str, seconds: int) -> None:
+    async def skip(self, queue_id: str, seconds: int = 10) -> None:
         """
         Handle SKIP command for given queue.
 
@@ -204,18 +211,20 @@ class PlayerQueues:
     async def play_media(
         self,
         queue_id: str,
-        media: MediaItemType | list[MediaItemType] | str | list[str],
+        media: MediaItemType | ItemMapping | str | list[MediaItemType | ItemMapping | str],
         option: QueueOption | None = None,
         radio_mode: bool = False,
-        start_item: str | None = None,
+        start_item: PlayableMediaItemType | str | None = None,
         user: str | LinkedUser | None = None,
         username: str | None = None,
         sort_by: str | None = None,
+        start_from_beginning: bool = False,
+        shuffle: bool | None = None,
     ) -> None:
         """
         Play media item(s) on the given queue.
 
-        - media: Media that should be played (MediaItem(s) or uri's).
+        - media: Media that should be played (MediaItem(s) and/or uri's).
         - queue_opt: Which enqueue mode to use.
         - radio_mode: Deprecated. When True against a server that supports radio playlists, the
           seed item(s) are translated client-side to a radio_playlist:// dynamic playlist (see
@@ -227,6 +236,10 @@ class PlayerQueues:
           sufficient permissions.
         - username: Deprecated alias for user.
         - sort_by: Optional sort key to order tracks before applying start_item.
+        - start_from_beginning: Start a podcast episode at position 0, ignoring any saved
+          resume position.
+        - shuffle: Play the media shuffled (or explicitly in order). Omit to follow the
+          queue's own shuffle setting.
         """
         if (
             radio_mode
@@ -247,6 +260,8 @@ class PlayerQueues:
             radio_mode=radio_mode,
             start_item=start_item,
             sort_by=sort_by,
+            start_from_beginning=start_from_beginning,
+            shuffle=shuffle,
             **impersonation_arg(self.client.server_info, user or username),
         )
 
@@ -265,19 +280,90 @@ class PlayerQueues:
             require_schema=25,
         )
 
-    async def dont_stop_the_music(self, queue_id: str, dont_stop_the_music_enabled: bool) -> None:
-        """Configure Don't stop the music setting on the queue."""
-        await self.client.send_command(
-            "player_queues/dont_stop_the_music",
-            queue_id=queue_id,
-            dont_stop_the_music_enabled=dont_stop_the_music_enabled,
-        )
-
     async def play_pause(self, queue_id: str) -> None:
         """Toggle play/pause on given playerqueue."""
         await self.client.send_command(
             "player_queues/play_pause",
             queue_id=queue_id,
+        )
+
+    async def autoplay(self, queue_id: str, autoplay_enabled: bool) -> None:
+        """Configure Autoplay setting on the queue."""
+        await self.client.send_command(
+            "player_queues/autoplay",
+            queue_id=queue_id,
+            autoplay_enabled=autoplay_enabled,
+            require_schema=84,
+        )
+
+    async def crossfade(self, queue_id: str, crossfade_enabled: bool) -> None:
+        """Enable or disable crossfade on the queue."""
+        await self.client.send_command(
+            "player_queues/crossfade",
+            queue_id=queue_id,
+            crossfade_enabled=crossfade_enabled,
+            require_schema=84,
+        )
+
+    async def move_item_end(self, queue_id: str, queue_item_id: str) -> None:
+        """Move queue item to the end the queue."""
+        await self.client.send_command(
+            "player_queues/move_item_end",
+            queue_id=queue_id,
+            queue_item_id=queue_item_id,
+            require_schema=84,
+        )
+
+    async def overlay(
+        self,
+        queue_id: str,
+        enabled: bool | None = None,
+        source: str | None = None,
+        volume: int | None = None,
+    ) -> None:
+        """
+        Configure the audio overlay (a looping sound effect mixed in) for the given queue.
+
+        - enabled: Enable or disable the audio overlay. Omit to leave unchanged.
+        - source: URI of the sound effect item to mix in. Omit to leave unchanged.
+        - volume: Overlay loudness relative to the music in percent (0-200, 100 = equally
+          loud). Omit to leave unchanged.
+        """
+        await self.client.send_command(
+            "player_queues/overlay",
+            queue_id=queue_id,
+            enabled=enabled,
+            source=source,
+            volume=volume,
+            require_schema=84,
+        )
+
+    async def set_playback_speed(
+        self, queue_id: str, speed: float, queue_item_id: str | None = None
+    ) -> None:
+        """
+        Set the playback speed for the given (or current) queue item.
+
+        Only supported for audiobooks and podcast episodes.
+        - speed: playback speed multiplier (0.5 to 3.0). 1.0 = normal speed.
+        """
+        await self.client.send_command(
+            "player_queues/set_playback_speed",
+            queue_id=queue_id,
+            speed=speed,
+            queue_item_id=queue_item_id,
+            require_schema=84,
+        )
+
+    async def save_as_playlist(self, queue_id: str, name: str) -> BackgroundTask:
+        """Save the current queue items as a new playlist."""
+        return BackgroundTask.from_dict(
+            await self.client.send_command(
+                "player_queues/save_as_playlist",
+                queue_id=queue_id,
+                name=name,
+                require_schema=84,
+            )
         )
 
     async def _get_player_queues(self) -> list[PlayerQueue]:
