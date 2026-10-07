@@ -21,7 +21,7 @@ echo "Server is reachable. Launching Claude Code..."
 echo ""
 
 # Launch Claude Code with the sync instructions
-claude --add-dir "../core" --add-dir "/tmp" --permission-mode bypassPermissions "Please sync the Music Assistant Python client library from the server API documentation.
+claude --add-dir "../core" --add-dir "../server" --add-dir "/tmp" --permission-mode bypassPermissions "Please sync the Music Assistant Python client library from the server API documentation.
 
 ## Context
 
@@ -52,10 +52,11 @@ Update the Python client controller files to match the current server API:
    SERVER_URL/info
    Extract the \`schema_version\` field - this will be used for all new/updated methods.
 
-2. Fetch the API commands and schemas:
-   SERVER_URL/api-docs/commands
-   SERVER_URL/api-docs/schemas
-   Parse the commands and schemas pages to get a list of API commands, their parameters, return types, and descriptions.
+2. Fetch the API commands and schemas as JSON (the HTML pages are rendered client-side):
+   SERVER_URL/api-docs/commands.json
+   SERVER_URL/api-docs/schemas.json
+   Each command has \`command\`, \`category\`, \`description\`, \`parameters\` (name, type, required, description) and \`return_type\`.
+   The JSON has no parameter defaults: take defaults, keyword-only markers and exact types from the server source.
 
 ### Step 2: Process Each Controller
 
@@ -87,6 +88,9 @@ Skip these specific commands (they use cached data or are already handled):
 - \`player_queues/get\` - already handled in code with special logic
 - \`dashboard/dashboards\` - dashboards are cached locally, fetched once via fetch_state
 - \`dashboard/sessions\` - dashboard sessions are cached locally, fetched once via fetch_state
+- \`music/*/get_collection\` except \`music/audiobooks/get_collection\` - registered for every
+  media type by the base controller, but only audiobooks have collections (series). For the
+  same reason \`collapse_collections\` is only exposed on audiobook listings.
 - Any command in ignored categories
 
 #### B. Generate Method Name from Command Path
@@ -103,12 +107,18 @@ Use these naming conventions:
 - \`music/albums/album_versions\` → \`album_versions\` (singular_versions)
 - \`music/tracks/similar_tracks\` → \`similar_tracks\` (no prefix)
 - \`music/podcasts/podcast_episode\` → \`podcast_episode\` (singular)
+- \`music/tracks/get_by_external_id\` → \`get_track_by_external_id\`
+- \`music/audiobooks/get_collection\` → \`get_audiobook_collection\`
+- \`music/artists/top_tracks\` → \`get_artist_top_tracks\` (like get_artist_tracks)
+- \`music/genres/add_alias\` → \`add_genre_alias\` (action_singular_rest)
 
 **Config category** (command: \`config/TYPE/ACTION\`):
 - \`config/core/get\` → \`get_core_config\`
 - \`config/players/save\` → \`save_player_config\`
 - \`config/providers/get_value\` → \`get_provider_config_value\`
 - \`config/players/get_entries\` → \`get_player_config_entries\` (NOT get_entries_player_config)
+- \`config/players/invoke_action\` → \`invoke_player_config_action\`
+- \`config/providers/setup\` → \`setup_provider\` (verb commands like reload_provider)
 
 **Players category**:
 - \`players/cmd/volume_set\` → \`volume_set\`
@@ -170,7 +180,12 @@ async def count_method(self) -> int:
    - \`Array of X\` → \`list[X]\`
    - \`X | Y | Z\` → \`X | Y | Z\` (preserve unions)
    - type Aliases (e.g., \`MediaItemType\`, \`ConfigValueType\`) → use the alias name
-   - Use \`| None = None\` for optional parameters
+   - Use \`| None = None\` for optional parameters: the server ignores unknown args and
+     fills missing/None args with its own default, so the client does not duplicate defaults
+   - When adding parameters to an existing method, append them at the end so positional
+     callers keep working
+   - When widening a parameter type, keep the types it already accepted (\`list\` is invariant:
+     \`list[A | B]\` does not accept a \`list[A]\`)
 
 2. **Return Type Handling:**
    - Simple types (\`str\`, \`bool\`, \`int\`, \`float\`, \`dict\`) → return as-is
@@ -179,6 +194,13 @@ async def count_method(self) -> int:
    - **MediaItemType Union type** (e.g., \`Artist | Album | Track\`) → use media_from_dict helper.
    - Be aware of type Aliases such as MediaItemType and ConfigValueType and try to use them for the type annotations on the method definitions to match the server.
    - Anything else: try to infer from context or check server code (or ask).
+   - \`AsyncGenerator[X]\` and \`UniqueList[X]\` arrive as a JSON list → \`list[X]\`.
+   - Tuples arrive as a JSON list → unpack and return a tuple.
+   - Generic \`ItemCls\` in the base media controller → the concrete model per media type.
+   - \`X | None\` → \`X.from_dict(result) if result else None\`.
+   - Unions of models (e.g. \`list[ConfigEntry] | ConfigActionResult\`) → check \`isinstance(result, list)\`.
+   - When a flag widens the return type (e.g. \`collapse_collections\`), add \`@overload\`s so the
+     default call keeps its old return type.
 
    Examples:
    \`\`\`python
@@ -223,6 +245,9 @@ For each command:
 2. If it exists:
    - Compare the generated signature/docstring with existing
    - If different, remove old method and add updated version
+   - Keep the method name, client-only parameters (e.g. \`user\`/\`username\` impersonation,
+     callbacks) and existing compatibility logic (\`require_schema\` conditions, fallbacks)
+   - Only rewrite a hand-written docstring when its meaning changed, not for rewording
    - Print: \`↻ Updated: method_name\`
 3. If it doesn't exist:
    - Add the new method
@@ -245,30 +270,32 @@ After updating methods in each controller file:
 2. **Determine import modules** for each type:
 
    **Media Items** (from \`music_assistant_models.media_items\`):
-   - Artist, Album, Track, Radio, Playlist, Audiobook, Podcast, PodcastEpisode
-   - ItemMapping, PagedItems, SearchResults, BrowseFolder
+   - Artist, Album, Track, Radio, Playlist, Audiobook, Podcast, PodcastEpisode, Genre
+   - SoundEffect, AudioSource, MediaCollection, ItemMapping, SearchResults, BrowseFolder
+   - MediaItemType, PlayableMediaItemType, RecommendationFolder, ProviderMapping
+   - MediaItemImage, MediaItemPalette, MediaItemTranscriptCue
 
    **Players** (various modules):
-   - Player → \`music_assistant_models.player\`
-   - PlayerMedia → \`music_assistant_models.player\`
+   - Player, PlayerMedia, PlayerOptionValueType → \`music_assistant_models.player\`
    - PlayerControl → \`music_assistant_models.player_control\`
    - PlayerQueue → \`music_assistant_models.player_queue\`
-   - QueueItem → \`music_assistant_models.player_queue\`
+   - QueueItem → \`music_assistant_models.queue_item\`
 
    **Config** (various modules):
-   - CoreConfig, ProviderConfig, PlayerConfig → \`music_assistant_models.config\`
-   - ConfigEntry, ConfigEntryValue → \`music_assistant_models.config_entries\`
+   - CoreConfig, ProviderConfig, PlayerConfig, PlayerQueueConfig → \`music_assistant_models.config_entries\`
+   - ConfigEntry, ConfigValueType, ConfigActionResult → \`music_assistant_models.config_entries\`
    - DSPConfig, DSPConfigPreset → \`music_assistant_models.dsp\`
+   - SetupFlowStep → \`music_assistant_models.setup_flow\`
 
    **Enums** (from \`music_assistant_models.enums\`):
-   - MediaType, MediaItemType, RepeatMode, ConfigValueType, ProviderType, AlbumType
+   - MediaType, RepeatMode, QueueOption, ProviderType, AlbumType, ArtistType
+   - ExternalID, ProviderSharing, PlaylistMatchPolicy
 
    **Other**:
+   - User, AuthToken, Role, Scope, UserSummary → \`music_assistant_models.auth\`
+   - BackgroundTask → \`music_assistant_models.background_task\`
    - ProviderManifest → \`music_assistant_models.provider\`
-   - PluginSource → \`music_assistant_models.plugin_source\`
-   - QueueOption → \`music_assistant_models.player_queue\`
-   - SyncTask → (check server for correct import)
-   - RecommendationFolder → (check server for correct import)
+   - Verify against the music_assistant_models version pinned in pyproject.toml
 
 3. **Update imports intelligently**:
    - Parse existing imports in the file
@@ -298,7 +325,10 @@ After updating methods in each controller file:
 
 After updating all files:
 1. Run syntax check: \`python -m py_compile <file>\`
-2. Check for common issues:
+2. Run \`ruff check\`, \`ruff format\` and \`mypy music_assistant_client\` in an environment with the
+   music_assistant_models version pinned in pyproject.toml (a local .venv may be outdated).
+   For methods exceeding max-args (e.g. library listings) add \`# noqa: PLR0913, PLR0917\`.
+3. Check for common issues:
    - Missing imports
    - Duplicate imports
    - Methods with incorrect indentation
@@ -356,6 +386,12 @@ If you encounter issues:
 ## Additional Context
 
 The server generates API documentation automatically from Python function signatures and docstrings using the \`@api_command\` decorator. When in doubt about parameter types or return types, you can look at the actual server implementation in the repository.
+Not every command uses the decorator: the media controllers register theirs with
+\`self.mass.register_api_command(...)\`, the shared ones in \`controllers/music/media/base.py\`
+via \`f\"music/{api_base}/...\"\`. Resolve the handler through the class hierarchy.
+Commands registered with \`allow_impersonation=True\` accept an extra \`user\` argument (user_id,
+username or LinkedUser dict) that is in neither the handler signature nor the API docs. Give those
+methods a \`user: str | LinkedUser | None = None\` parameter, like the existing library listings.
 
 If you really have questions about the task because something is unclear, ask for clarification before proceeding.
 Then also adjust the instructions in this file accordingly for future runs.

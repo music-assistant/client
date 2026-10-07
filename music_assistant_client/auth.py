@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from music_assistant_models.auth import AuthToken, User, UserAuthProvider
+from music_assistant_models.auth import AuthToken, Role, User, UserAuthProvider
 
 if TYPE_CHECKING:
+    from music_assistant_models.auth import Scope
+
     from .client import MusicAssistantClient
 
 
@@ -57,12 +59,12 @@ class Auth:
         ]
 
     async def get_user(self, user_id: str) -> User | None:
-        """Get user by ID (admin only)."""
+        """Get user by ID (requires the users.read scope)."""
         result = await self.client.send_command("auth/user", user_id=user_id)
         return User.from_dict(result) if result else None
 
     async def list_users(self) -> list[User]:
-        """Get all users (admin only)."""
+        """Get all users (requires the users.read scope)."""
         return [User.from_dict(user) for user in await self.client.send_command("auth/users")]
 
     async def create_user(
@@ -73,7 +75,6 @@ class Auth:
         display_name: str | None = None,
         avatar_url: str | None = None,
         player_filter: list[str] | None = None,
-        provider_filter: list[str] | None = None,
     ) -> User:
         """Create a new user with built-in authentication (admin only)."""
         return User.from_dict(
@@ -85,7 +86,6 @@ class Auth:
                 display_name=display_name,
                 avatar_url=avatar_url,
                 player_filter=player_filter,
-                provider_filter=provider_filter,
             )
         )
 
@@ -127,7 +127,6 @@ class Auth:
         role: str | None = None,
         preferences: dict[str, Any] | None = None,
         player_filter: list[str] | None = None,
-        provider_filter: list[str] | None = None,
     ) -> User:
         """
         Update user profile information.
@@ -144,8 +143,6 @@ class Auth:
                 or the id of a custom role (optional, admin only)
             preferences: User preferences dict (completely replaces existing, optional)
             player_filter: List of player IDs the user has access to (admin only, optional)
-            provider_filter: List of provider instance IDs the user has access to
-                (admin only, optional)
 
         Returns:
             Updated user object
@@ -161,10 +158,104 @@ class Auth:
                 role=role,
                 preferences=preferences,
                 player_filter=player_filter,
-                provider_filter=provider_filter,
             )
         )
 
     async def logout(self) -> None:
         """Logout current user by revoking the current token."""
         await self.client.send_command("auth/logout")
+
+    async def login(
+        self,
+        username: str | None = None,
+        password: str | None = None,
+        provider_id: str = "builtin",
+        device_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Authenticate user with credentials via WebSocket."""
+        result: dict[str, Any] = await self.client.send_command(
+            "auth/login",
+            username=username,
+            password=password,
+            provider_id=provider_id,
+            device_name=device_name,
+            require_schema=84,
+        )
+        return result
+
+    async def get_providers(self) -> list[dict[str, Any]]:
+        """Get list of available authentication providers."""
+        result: list[dict[str, Any]] = await self.client.send_command(
+            "auth/providers", require_schema=84
+        )
+        return result
+
+    async def get_authorization_url(
+        self, provider_id: str, return_url: str | None = None
+    ) -> dict[str, str | None]:
+        """Get OAuth authorization URL for authentication."""
+        result: dict[str, str | None] = await self.client.send_command(
+            "auth/authorization_url",
+            provider_id=provider_id,
+            return_url=return_url,
+            require_schema=84,
+        )
+        return result
+
+    async def list_join_codes(self, user_id: str | None = None) -> list[dict[str, Any]]:
+        """List join codes, optionally filtered by user (admin only)."""
+        result: list[dict[str, Any]] = await self.client.send_command(
+            "auth/join_codes", user_id=user_id, require_schema=84
+        )
+        return result
+
+    async def exchange_join_code(self, code: str) -> dict[str, Any]:
+        """Exchange a join code for an access token (public API)."""
+        result: dict[str, Any] = await self.client.send_command(
+            "auth/join_code/exchange", code=code, require_schema=84
+        )
+        return result
+
+    async def revoke_join_code(self, code_id: str) -> None:
+        """Revoke a specific join code (admin only)."""
+        await self.client.send_command("auth/join_code/revoke", code_id=code_id, require_schema=84)
+
+    async def get_roles(self) -> list[Role]:
+        """Get all user roles: the builtin roles first, then the custom roles by name."""
+        return [
+            Role.from_dict(role)
+            for role in await self.client.send_command("auth/roles", require_schema=84)
+        ]
+
+    async def get_role_scopes(self) -> dict[str, list[str]]:
+        """Get the scopes granted by each of the builtin and custom user roles, by role id."""
+        result: dict[str, list[str]] = await self.client.send_command(
+            "auth/scopes", require_schema=84
+        )
+        return result
+
+    async def create_role(self, name: str, scopes: list[Scope]) -> Role:
+        """Create a custom user role (requires the users.manage scope)."""
+        return Role.from_dict(
+            await self.client.send_command(
+                "auth/role/create", name=name, scopes=scopes, require_schema=84
+            )
+        )
+
+    async def update_role(
+        self, role_id: str, name: str | None = None, scopes: list[Scope] | None = None
+    ) -> Role:
+        """Update a custom user role (requires the users.manage scope)."""
+        return Role.from_dict(
+            await self.client.send_command(
+                "auth/role/update",
+                role_id=role_id,
+                name=name,
+                scopes=scopes,
+                require_schema=84,
+            )
+        )
+
+    async def delete_role(self, role_id: str) -> None:
+        """Delete a custom user role (requires the users.manage scope)."""
+        await self.client.send_command("auth/role/delete", role_id=role_id, require_schema=84)
