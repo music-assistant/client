@@ -376,7 +376,7 @@ class TestListingPayloads(IsolatedAsyncioTestCase):
             sort_direction=None,
             offset=None,
             random_seed=None,
-            require_schema=94,
+            require_schema=92,
         )
 
         send_command.reset_mock()
@@ -395,6 +395,22 @@ class TestListingPayloads(IsolatedAsyncioTestCase):
             random_seed=None,
             require_schema=None,
         )
+
+    async def test_similar_track_options_have_independent_schema_requirements(self) -> None:
+        send_command = AsyncMock(return_value=[])
+        music = Music(SimpleNamespace(send_command=send_command))  # type: ignore[arg-type]
+
+        await music.similar_tracks("track-id", "provider-id", search="live")
+        self.assertEqual(send_command.await_args.kwargs["require_schema"], 92)
+
+        await music.similar_tracks("track-id", "provider-id", offset=0)
+        self.assertEqual(send_command.await_args.kwargs["require_schema"], 92)
+
+        await music.similar_tracks("track-id", "provider-id", sort_direction=SortDirection.DESC)
+        self.assertEqual(send_command.await_args.kwargs["require_schema"], 92)
+
+        await music.similar_tracks("track-id", "provider-id", search="live", random_seed=0)
+        self.assertEqual(send_command.await_args.kwargs["require_schema"], 98)
 
     async def test_play_media_sends_typed_sort_and_schema_requirement(self) -> None:
         send_command = AsyncMock()

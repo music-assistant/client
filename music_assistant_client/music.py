@@ -1957,7 +1957,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
-                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
+                    schema_version=ARTIST_LISTING_SCHEMA_VERSION,
                     has_paging=any(value is not None for value in (search, offset)),
                 ),
             )
