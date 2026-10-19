@@ -82,6 +82,6 @@ jobs:
           python -m pip install --upgrade pip build setuptools
           pip install . .[test]
       - name: Run tests
-        run: python -m unittest discover -s tests -v
+        run: python -m pytest
       - name: Lint/test with pre-commit
         run: SKIP=no-commit-to-branch pre-commit run --all-files

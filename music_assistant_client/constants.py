@@ -5,6 +5,9 @@ from typing import Final
 # Minimum server schema for the scalar provider filter on artist tracks and albums.
 ARTIST_PROVIDER_FILTER_SCHEMA_VERSION: Final[int] = 31
 
+# Minimum server schema for requesting library listings on behalf of a user.
+LIBRARY_USER_SCHEMA_VERSION: Final[int] = 35
+
 # Minimum server schema for library sorting and sort discovery.
 TYPED_LISTING_SCHEMA_VERSION: Final[int] = 86
 
