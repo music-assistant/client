@@ -37,6 +37,7 @@ from music_assistant_models.media_items import (
 from .constants import (
     ALBUM_TRACKS_LISTING_SCHEMA_VERSION,
     ARTIST_LISTING_SCHEMA_VERSION,
+    ARTIST_PROVIDER_FILTER_SCHEMA_VERSION,
     LISTING_FILTER_SCHEMA_VERSION,
     PLAYLIST_PODCAST_LISTING_SCHEMA_VERSION,
     RANDOM_SEED_SCHEMA_VERSION,
@@ -59,6 +60,7 @@ def _listing_require_schema(
     schema_version: int = TYPED_LISTING_SCHEMA_VERSION,
     has_paging: bool = False,
     has_filters: bool = False,
+    has_provider_filter: bool = False,
     user: bool = False,
 ) -> int | None:
     """Return the minimum API schema needed by the requested listing options."""
@@ -70,6 +72,8 @@ def _listing_require_schema(
         return schema_version
     if user:
         return 35
+    if has_provider_filter:
+        return ARTIST_PROVIDER_FILTER_SCHEMA_VERSION
     return None
 
 
@@ -493,10 +497,9 @@ class Music:
                     sort_direction,
                     random_seed,
                     schema_version=ARTIST_LISTING_SCHEMA_VERSION,
-                    has_paging=any(
-                        value is not None for value in (provider_filter, search, limit, offset)
-                    ),
+                    has_paging=any(value is not None for value in (search, limit, offset)),
                     has_filters=favorite is not None,
+                    has_provider_filter=provider_filter is not None,
                 ),
             )
         ]
@@ -539,10 +542,9 @@ class Music:
                     sort_direction,
                     random_seed,
                     schema_version=ARTIST_LISTING_SCHEMA_VERSION,
-                    has_paging=any(
-                        value is not None for value in (provider_filter, search, limit, offset)
-                    ),
+                    has_paging=any(value is not None for value in (search, limit, offset)),
                     has_filters=album_types is not None or favorite is not None,
+                    has_provider_filter=provider_filter is not None,
                 ),
             )
         ]
@@ -906,7 +908,6 @@ class Music:
         offset: int | None = None,
         order_by: str | None = None,
         provider: str | list[str] | None = None,
-        genre: int | list[int] | None = None,
         played_only: bool = False,
         hide_empty: bool | None = None,
         media_type: MediaType | None = None,
@@ -928,7 +929,6 @@ class Music:
                 offset=offset,
                 order_by=order_by,
                 provider=provider,
-                genre=genre,
                 played_only=played_only,
                 hide_empty=hide_empty,
                 media_type=media_type,

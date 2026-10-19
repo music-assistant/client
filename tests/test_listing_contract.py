@@ -189,13 +189,39 @@ class TestListingPayloads(IsolatedAsyncioTestCase):
         for get_listing in (music.get_artist_tracks, music.get_artist_albums):
             with self.subTest(method=get_listing.__name__):
                 await get_listing("item-id", "provider-id", provider_filter="provider-id")
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], 31)
+
+                await get_listing("item-id", "provider-id", provider_filter="provider-id", limit=10)
                 self.assertEqual(send_command.await_args.kwargs["require_schema"], 92)
+
+                await get_listing(
+                    "item-id", "provider-id", provider_filter="provider-id", favorite=False
+                )
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], 96)
+
+                await get_listing(
+                    "item-id", "provider-id", provider_filter="provider-id", random_seed=0
+                )
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], 98)
 
         await music.get_playlist_tracks("item-id", "provider-id", favorite=False)
         self.assertEqual(send_command.await_args.kwargs["require_schema"], 93)
 
         await music.get_podcast_episodes("item-id", "provider-id", fully_played=False)
         self.assertEqual(send_command.await_args.kwargs["require_schema"], 93)
+
+    async def test_genre_listing_does_not_send_unsupported_genre_filter(self) -> None:
+        send_command = AsyncMock(return_value=[])
+        music = Music(SimpleNamespace(send_command=send_command))  # type: ignore[arg-type]
+
+        await music.get_library_genres(provider="provider-id", hide_empty=True)
+
+        self.assertNotIn("genre", send_command.await_args.kwargs)
+        self.assertEqual(send_command.await_args.kwargs["provider"], "provider-id")
+        self.assertTrue(send_command.await_args.kwargs["hide_empty"])
+
+        with self.assertRaises(TypeError):
+            await music.get_library_genres(genre=1)  # type: ignore[call-arg]
 
     async def test_genre_options_have_independent_schema_requirements(self) -> None:
         send_command = AsyncMock(return_value=[])
