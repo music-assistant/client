@@ -82,12 +82,27 @@ class Music:
 
     async def get_sort_options(self, listing: ListingType) -> list[SortOptionInfo]:
         """Get the sort options offered by a listing, with the default first."""
+        # The complete nonlibrary registry shipped before its individual listing endpoints.
+        library_listings = (
+            ListingType.LIBRARY_ARTISTS,
+            ListingType.LIBRARY_ALBUMS,
+            ListingType.LIBRARY_TRACKS,
+            ListingType.LIBRARY_PLAYLISTS,
+            ListingType.LIBRARY_RADIOS,
+            ListingType.LIBRARY_AUDIOBOOKS,
+            ListingType.LIBRARY_PODCASTS,
+            ListingType.LIBRARY_GENRES,
+        )
         return [
             SortOptionInfo.from_dict(item)
             for item in await self.client.send_command(
                 "music/sort_options",
                 listing=listing,
-                require_schema=TYPED_LISTING_SCHEMA_VERSION,
+                require_schema=(
+                    TYPED_LISTING_SCHEMA_VERSION
+                    if listing in library_listings
+                    else ALBUM_TRACKS_LISTING_SCHEMA_VERSION
+                ),
             )
         ]
 
@@ -926,7 +941,6 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
-                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
                 ),
             )
         ]
@@ -960,8 +974,12 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
-                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
-                    has_paging=any(value is not None for value in (limit, offset, search)),
+                    schema_version=(
+                        VERSIONS_BROWSE_LISTING_SCHEMA_VERSION
+                        if search is not None
+                        else TYPED_LISTING_SCHEMA_VERSION
+                    ),
+                    has_paging=search is not None,
                 ),
             )
         ]
@@ -995,8 +1013,12 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
-                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
-                    has_paging=any(value is not None for value in (limit, offset, search)),
+                    schema_version=(
+                        VERSIONS_BROWSE_LISTING_SCHEMA_VERSION
+                        if search is not None
+                        else TYPED_LISTING_SCHEMA_VERSION
+                    ),
+                    has_paging=search is not None,
                 ),
             )
         ]

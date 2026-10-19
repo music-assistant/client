@@ -5,7 +5,7 @@ from typing import Final
 # Minimum server schema for library sorting and sort discovery.
 TYPED_LISTING_SCHEMA_VERSION: Final[int] = 86
 
-# Minimum server schema for album-track sorting, search and paging.
+# Minimum server schema for album-track sorting, search, paging and nonlibrary sort discovery.
 ALBUM_TRACKS_LISTING_SCHEMA_VERSION: Final[int] = 89
 
 # Minimum server schema for artist listings and track albums.
@@ -14,7 +14,7 @@ ARTIST_LISTING_SCHEMA_VERSION: Final[int] = 92
 # Minimum server schema for playlist-track and podcast-episode sorting, search and paging.
 PLAYLIST_PODCAST_LISTING_SCHEMA_VERSION: Final[int] = 93
 
-# Minimum server schema for version, genre, similar and browse listings.
+# Minimum server schema for version, similar and browse listings, and genre-track/album search.
 VERSIONS_BROWSE_LISTING_SCHEMA_VERSION: Final[int] = 94
 
 # Minimum server schema for typed playback sorting.
