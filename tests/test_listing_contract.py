@@ -150,6 +150,23 @@ class TestListingPayloads(IsolatedAsyncioTestCase):
             require_schema=96,
         )
 
+        send_command.reset_mock()
+        await music.similar_tracks("track-id", "provider-id", limit=25)
+        send_command.assert_awaited_once_with(
+            "music/tracks/similar_tracks",
+            item_id="track-id",
+            provider_instance_id_or_domain="provider-id",
+            limit=25,
+            allow_lookup=None,
+            preferred_provider_instances=None,
+            search=None,
+            sort_field=None,
+            sort_direction=None,
+            offset=None,
+            random_seed=None,
+            require_schema=None,
+        )
+
     async def test_play_media_sends_typed_sort_and_schema_requirement(self) -> None:
         send_command = AsyncMock()
         client = SimpleNamespace(

@@ -1918,7 +1918,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
-                    has_paging=any(value is not None for value in (search, limit, offset)),
+                    has_paging=any(value is not None for value in (search, offset)),
                 ),
             )
         ]
