@@ -412,6 +412,59 @@ class TestListingPayloads(IsolatedAsyncioTestCase):
         await music.similar_tracks("track-id", "provider-id", search="live", random_seed=0)
         self.assertEqual(send_command.await_args.kwargs["require_schema"], 98)
 
+    async def test_play_media_rejects_legacy_sort_with_direction_only(self) -> None:
+        send_command = AsyncMock()
+        client = SimpleNamespace(
+            send_command=send_command,
+            subscribe=lambda *_args: None,
+            server_info=SimpleNamespace(schema_version=95),
+        )
+        queues = PlayerQueues(client)  # type: ignore[arg-type]
+
+        for direction in (SortDirection.ASC, SortDirection.DESC):
+            with (
+                self.subTest(direction=direction),
+                self.assertRaisesRegex(ValueError, "sort_field"),
+            ):
+                await queues.play_media(
+                    "queue-id",
+                    "album://album-id",
+                    sort_by="name",
+                    sort_direction=direction,
+                )
+
+        send_command.assert_not_awaited()
+
+    async def test_play_media_preserves_legacy_sort_without_new_requirement(self) -> None:
+        send_command = AsyncMock()
+        client = SimpleNamespace(
+            send_command=send_command,
+            subscribe=lambda *_args: None,
+            server_info=SimpleNamespace(schema_version=46),
+        )
+        queues = PlayerQueues(client)  # type: ignore[arg-type]
+
+        await queues.play_media("queue-id", "album://album-id", sort_by="name")
+
+        self.assertEqual(send_command.await_args.kwargs["sort_by"], "name")
+        self.assertIsNone(send_command.await_args.kwargs["require_schema"])
+
+    async def test_play_media_allows_direction_only_without_legacy_sort(self) -> None:
+        send_command = AsyncMock()
+        client = SimpleNamespace(
+            send_command=send_command,
+            subscribe=lambda *_args: None,
+            server_info=SimpleNamespace(schema_version=95),
+        )
+        queues = PlayerQueues(client)  # type: ignore[arg-type]
+
+        await queues.play_media("queue-id", "album://album-id", sort_direction=SortDirection.DESC)
+
+        self.assertIsNone(send_command.await_args.kwargs["sort_by"])
+        self.assertIsNone(send_command.await_args.kwargs["sort_field"])
+        self.assertEqual(send_command.await_args.kwargs["sort_direction"], SortDirection.DESC)
+        self.assertEqual(send_command.await_args.kwargs["require_schema"], 95)
+
     async def test_play_media_sends_typed_sort_and_schema_requirement(self) -> None:
         send_command = AsyncMock()
         client = SimpleNamespace(

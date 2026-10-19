@@ -237,9 +237,15 @@ class PlayerQueues:
           sufficient permissions.
         - username: Deprecated alias for user.
         - sort_by: Deprecated sort key; use sort_field and sort_direction instead.
+          Ignored when sort_field is set; cannot be combined with sort_direction alone.
         - sort_field: Sort field to order album or playlist tracks before applying start_item.
         - sort_direction: Direction for the selected sort field.
         """
+        if sort_by is not None and sort_field is None and sort_direction is not None:
+            raise ValueError(
+                "Use sort_field with sort_direction instead of combining sort_by "
+                "with sort_direction alone"
+            )
         if (
             radio_mode
             and self.client.server_info is not None
@@ -258,7 +264,7 @@ class PlayerQueues:
             option=option,
             radio_mode=radio_mode,
             start_item=start_item,
-            sort_by=(sort_by if sort_field is None and sort_direction is None else None),
+            sort_by=(sort_by if sort_field is None else None),
             sort_field=sort_field,
             sort_direction=sort_direction,
             require_schema=(
