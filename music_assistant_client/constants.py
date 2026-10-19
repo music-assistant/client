@@ -2,6 +2,31 @@
 
 from typing import Final
 
-TYPED_LISTING_SCHEMA_VERSION: Final[int] = 96
+# Minimum server schema for library sorting and sort discovery.
+TYPED_LISTING_SCHEMA_VERSION: Final[int] = 86
+
+# Minimum server schema for album-track sorting, search and paging.
+ALBUM_TRACKS_LISTING_SCHEMA_VERSION: Final[int] = 89
+
+# Minimum server schema for artist listings and track albums.
+ARTIST_LISTING_SCHEMA_VERSION: Final[int] = 92
+
+# Minimum server schema for playlist-track and podcast-episode sorting, search and paging.
+PLAYLIST_PODCAST_LISTING_SCHEMA_VERSION: Final[int] = 93
+
+# Minimum server schema for version, genre, similar and browse listings.
+VERSIONS_BROWSE_LISTING_SCHEMA_VERSION: Final[int] = 94
+
+# Minimum server schema for typed playback sorting.
+PLAY_MEDIA_SORT_SCHEMA_VERSION: Final[int] = 95
+
+# Minimum server schema for favorite/album-type and episode-exclusion filters,
+# not basic sorting or paging.
+LISTING_FILTER_SCHEMA_VERSION: Final[int] = 96
+
+# Minimum server schema for stable seeded random ordering across pages.
 RANDOM_SEED_SCHEMA_VERSION: Final[int] = 98
+
+# Client contract checked against the server's min_supported_schema_version at connect time,
+# not a feature gate.
 API_SCHEMA_VERSION: Final[int] = 46

@@ -34,7 +34,15 @@ from music_assistant_models.media_items import (
     media_from_dict,
 )
 
-from .constants import RANDOM_SEED_SCHEMA_VERSION, TYPED_LISTING_SCHEMA_VERSION
+from .constants import (
+    ALBUM_TRACKS_LISTING_SCHEMA_VERSION,
+    ARTIST_LISTING_SCHEMA_VERSION,
+    LISTING_FILTER_SCHEMA_VERSION,
+    PLAYLIST_PODCAST_LISTING_SCHEMA_VERSION,
+    RANDOM_SEED_SCHEMA_VERSION,
+    TYPED_LISTING_SCHEMA_VERSION,
+    VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
+)
 from .helpers import LinkedUser, impersonation_arg
 
 if TYPE_CHECKING:
@@ -48,14 +56,18 @@ def _listing_require_schema(
     sort_direction: SortDirection | None,
     random_seed: int | None,
     *,
+    schema_version: int = TYPED_LISTING_SCHEMA_VERSION,
     has_paging: bool = False,
+    has_filters: bool = False,
     user: bool = False,
 ) -> int | None:
     """Return the minimum API schema needed by the requested listing options."""
     if random_seed is not None:
         return RANDOM_SEED_SCHEMA_VERSION
+    if has_filters:
+        return LISTING_FILTER_SCHEMA_VERSION
     if sort_field is not None or sort_direction is not None or has_paging:
-        return TYPED_LISTING_SCHEMA_VERSION
+        return schema_version
     if user:
         return 35
     return None
@@ -75,7 +87,7 @@ class Music:
             for item in await self.client.send_command(
                 "music/sort_options",
                 listing=listing,
-                require_schema=96,
+                require_schema=TYPED_LISTING_SCHEMA_VERSION,
             )
         ]
 
@@ -174,6 +186,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
                     has_paging=any(value is not None for value in (search, limit, offset)),
                 ),
             )
@@ -210,6 +223,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=ARTIST_LISTING_SCHEMA_VERSION,
                     has_paging=any(value is not None for value in (search, limit, offset)),
                 ),
             )
@@ -322,9 +336,9 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
-                    has_paging=any(
-                        value is not None for value in (search, limit, offset, favorite)
-                    ),
+                    schema_version=ALBUM_TRACKS_LISTING_SCHEMA_VERSION,
+                    has_paging=any(value is not None for value in (search, limit, offset)),
+                    has_filters=favorite is not None,
                 ),
             )
         ]
@@ -358,6 +372,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
                     has_paging=any(value is not None for value in (search, limit, offset)),
                 ),
             )
@@ -462,10 +477,11 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=ARTIST_LISTING_SCHEMA_VERSION,
                     has_paging=any(
-                        value is not None
-                        for value in (provider_filter, search, limit, offset, favorite)
+                        value is not None for value in (provider_filter, search, limit, offset)
                     ),
+                    has_filters=favorite is not None,
                 ),
             )
         ]
@@ -507,17 +523,11 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=ARTIST_LISTING_SCHEMA_VERSION,
                     has_paging=any(
-                        value is not None
-                        for value in (
-                            provider_filter,
-                            search,
-                            limit,
-                            offset,
-                            album_types,
-                            favorite,
-                        )
+                        value is not None for value in (provider_filter, search, limit, offset)
                     ),
+                    has_filters=album_types is not None or favorite is not None,
                 ),
             )
         ]
@@ -589,7 +599,7 @@ class Music:
         provider_instance_id_or_domain: str,
         force_refresh: bool = False,
         *,
-        allow_dynamic_tracks: bool = True,
+        allow_dynamic_tracks: bool = False,
         strict_provider_instance: bool = False,
         favorite: bool | None = None,
         search: str | None = None,
@@ -624,6 +634,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=PLAYLIST_PODCAST_LISTING_SCHEMA_VERSION,
                     has_paging=any(
                         value is not None for value in (favorite, search, limit, offset)
                     ),
@@ -816,16 +827,11 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=PLAYLIST_PODCAST_LISTING_SCHEMA_VERSION,
                     has_paging=any(
-                        value is not None
-                        for value in (
-                            fully_played,
-                            search,
-                            limit,
-                            offset,
-                            exclude_item_id,
-                        )
+                        value is not None for value in (fully_played, search, limit, offset)
                     ),
+                    has_filters=exclude_item_id is not None,
                 ),
             )
         ]
@@ -916,7 +922,12 @@ class Music:
                 sort_field=sort_field,
                 sort_direction=sort_direction,
                 random_seed=random_seed,
-                require_schema=_listing_require_schema(sort_field, sort_direction, random_seed),
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
+                ),
             )
         ]
 
@@ -949,6 +960,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
                     has_paging=any(value is not None for value in (limit, offset, search)),
                 ),
             )
@@ -983,6 +995,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
                     has_paging=any(value is not None for value in (limit, offset, search)),
                 ),
             )
@@ -1031,6 +1044,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
                     has_paging=any(value is not None for value in (search, limit, offset)),
                 ),
             )
@@ -1107,6 +1121,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
                     has_paging=any(value is not None for value in (search, limit, offset)),
                 ),
             )
@@ -1666,6 +1681,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
                     has_paging=any(value is not None for value in (search, limit, offset)),
                 ),
             )
@@ -1793,6 +1809,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
                     has_paging=any(value is not None for value in (search, limit, offset)),
                 ),
             )
@@ -1918,6 +1935,7 @@ class Music:
                     sort_field,
                     sort_direction,
                     random_seed,
+                    schema_version=VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
                     has_paging=any(value is not None for value in (search, offset)),
                 ),
             )

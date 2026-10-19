@@ -15,7 +15,7 @@ from music_assistant_models.enums import (
 from music_assistant_models.player_queue import PlayerQueue
 from music_assistant_models.queue_item import QueueItem
 
-from .constants import TYPED_LISTING_SCHEMA_VERSION
+from .constants import PLAY_MEDIA_SORT_SCHEMA_VERSION
 from .helpers import LinkedUser, impersonation_arg
 
 if TYPE_CHECKING:
@@ -262,7 +262,7 @@ class PlayerQueues:
             sort_field=sort_field,
             sort_direction=sort_direction,
             require_schema=(
-                TYPED_LISTING_SCHEMA_VERSION
+                PLAY_MEDIA_SORT_SCHEMA_VERSION
                 if sort_field is not None or sort_direction is not None
                 else None
             ),

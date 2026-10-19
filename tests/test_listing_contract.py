@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock
 
-from music_assistant_models.enums import ListingType, SortDirection, SortField
+from music_assistant_models.enums import AlbumType, ListingType, SortDirection, SortField
 
 from music_assistant_client.music import Music
 from music_assistant_client.player_queues import PlayerQueues
@@ -38,7 +38,7 @@ class TestSortOptions(IsolatedAsyncioTestCase):
         send_command.assert_awaited_once_with(
             "music/sort_options",
             listing=ListingType.LIBRARY_TRACKS,
-            require_schema=96,
+            require_schema=86,
         )
         self.assertEqual(options[0].field, SortField.SORT_NAME)
         self.assertEqual(options[0].default_direction, SortDirection.ASC)
@@ -47,6 +47,130 @@ class TestSortOptions(IsolatedAsyncioTestCase):
 
 
 class TestListingPayloads(IsolatedAsyncioTestCase):
+    async def test_library_sorting_preserves_legacy_schema_requirements(self) -> None:
+        send_command = AsyncMock(return_value=[])
+        music = Music(SimpleNamespace(send_command=send_command))  # type: ignore[arg-type]
+
+        for get_listing in (
+            music.get_library_tracks,
+            music.get_library_albums,
+            music.get_library_artists,
+            music.get_library_playlists,
+            music.get_library_audiobooks,
+            music.get_library_podcasts,
+            music.get_library_radios,
+        ):
+            with self.subTest(method=get_listing.__name__):
+                await get_listing(order_by="name", limit=10)
+                self.assertIsNone(send_command.await_args.kwargs["require_schema"])
+
+                await get_listing(user="user-id")
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], 35)
+
+                await get_listing(sort_field=SortField.NAME, user="user-id")
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], 86)
+
+                await get_listing(sort_field=SortField.RANDOM, random_seed=0)
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], 98)
+
+    async def test_container_listings_require_their_introduction_schema(self) -> None:
+        send_command = AsyncMock(return_value=[])
+        music = Music(SimpleNamespace(send_command=send_command))  # type: ignore[arg-type]
+
+        for get_listing, schema_version in (
+            (music.get_album_tracks, 89),
+            (music.get_track_albums, 92),
+            (music.get_artist_tracks, 92),
+            (music.get_artist_albums, 92),
+            (music.get_playlist_tracks, 93),
+            (music.get_podcast_episodes, 93),
+            (music.get_track_versions, 94),
+            (music.get_album_versions, 94),
+            (music.get_radio_versions, 94),
+            (music.audiobook_versions, 94),
+            (music.podcast_versions, 94),
+        ):
+            with self.subTest(method=get_listing.__name__):
+                await get_listing("item-id", "provider-id")
+                self.assertIsNone(send_command.await_args.kwargs["require_schema"])
+
+                await get_listing("item-id", "provider-id", sort_field=SortField.NAME)
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], schema_version)
+
+                await get_listing("item-id", "provider-id", limit=10, offset=0)
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], schema_version)
+
+                await get_listing("item-id", "provider-id", search="live")
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], schema_version)
+
+                await get_listing("item-id", "provider-id", random_seed=0)
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], 98)
+
+    async def test_new_filters_keep_schema_96_requirement(self) -> None:
+        send_command = AsyncMock(return_value=[])
+        music = Music(SimpleNamespace(send_command=send_command))  # type: ignore[arg-type]
+
+        for get_listing in (
+            music.get_album_tracks,
+            music.get_artist_tracks,
+            music.get_artist_albums,
+        ):
+            with self.subTest(method=get_listing.__name__):
+                await get_listing("item-id", "provider-id", favorite=False)
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], 96)
+
+                await get_listing("item-id", "provider-id", favorite=False, random_seed=0)
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], 98)
+
+        await music.get_artist_albums("item-id", "provider-id", album_types=[AlbumType.SINGLE])
+        self.assertEqual(send_command.await_args.kwargs["require_schema"], 96)
+
+        await music.get_podcast_episodes("item-id", "provider-id", exclude_item_id="episode-id")
+        self.assertEqual(send_command.await_args.kwargs["require_schema"], 96)
+
+    async def test_original_listing_filters_do_not_require_schema_96(self) -> None:
+        send_command = AsyncMock(return_value=[])
+        music = Music(SimpleNamespace(send_command=send_command))  # type: ignore[arg-type]
+
+        for get_listing in (music.get_artist_tracks, music.get_artist_albums):
+            with self.subTest(method=get_listing.__name__):
+                await get_listing("item-id", "provider-id", provider_filter="provider-id")
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], 92)
+
+        await music.get_playlist_tracks("item-id", "provider-id", favorite=False)
+        self.assertEqual(send_command.await_args.kwargs["require_schema"], 93)
+
+        await music.get_podcast_episodes("item-id", "provider-id", fully_played=False)
+        self.assertEqual(send_command.await_args.kwargs["require_schema"], 93)
+
+    async def test_genre_and_browse_listings_require_schema_94(self) -> None:
+        send_command = AsyncMock(return_value=[])
+        music = Music(SimpleNamespace(send_command=send_command))  # type: ignore[arg-type]
+
+        for get_listing in (music.get_genre_tracks, music.get_genre_albums, music.browse):
+            with self.subTest(method=get_listing.__name__):
+                await get_listing("item-id", sort_field=SortField.NAME, limit=10, offset=0)
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], 94)
+
+                await get_listing("item-id", sort_field=SortField.RANDOM, random_seed=0)
+                self.assertEqual(send_command.await_args.kwargs["require_schema"], 98)
+
+        await music.get_library_genres(sort_field=SortField.NAME)
+        self.assertEqual(send_command.await_args.kwargs["require_schema"], 94)
+
+    async def test_playlist_dynamic_refresh_is_opt_in(self) -> None:
+        send_command = AsyncMock(return_value=[])
+        music = Music(SimpleNamespace(send_command=send_command))  # type: ignore[arg-type]
+
+        await music.get_playlist_tracks("playlist-id", "provider-id", limit=25, offset=25)
+
+        self.assertFalse(send_command.await_args.kwargs["force_refresh"])
+        self.assertFalse(send_command.await_args.kwargs["allow_dynamic_tracks"])
+
+        await music.get_playlist_tracks("playlist-id", "provider-id", allow_dynamic_tracks=True)
+
+        self.assertTrue(send_command.await_args.kwargs["allow_dynamic_tracks"])
+
     async def test_playlist_tracks_sends_paging_and_random_seed(self) -> None:
         send_command = AsyncMock(return_value=[])
         music = Music(SimpleNamespace(send_command=send_command))  # type: ignore[arg-type]
@@ -67,7 +191,7 @@ class TestListingPayloads(IsolatedAsyncioTestCase):
             item_id="playlist-id",
             provider_instance_id_or_domain="provider-id",
             force_refresh=True,
-            allow_dynamic_tracks=True,
+            allow_dynamic_tracks=False,
             strict_provider_instance=False,
             favorite=None,
             search="live",
@@ -125,7 +249,7 @@ class TestListingPayloads(IsolatedAsyncioTestCase):
             limit=10,
             offset=None,
             random_seed=None,
-            require_schema=96,
+            require_schema=94,
         )
 
         send_command.reset_mock()
@@ -147,7 +271,7 @@ class TestListingPayloads(IsolatedAsyncioTestCase):
             sort_direction=None,
             offset=None,
             random_seed=None,
-            require_schema=96,
+            require_schema=94,
         )
 
         send_command.reset_mock()
@@ -194,6 +318,6 @@ class TestListingPayloads(IsolatedAsyncioTestCase):
             sort_by=None,
             sort_field=SortField.NAME,
             sort_direction=SortDirection.DESC,
-            require_schema=96,
+            require_schema=95,
             user=None,
         )
