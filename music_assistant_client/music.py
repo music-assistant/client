@@ -5,12 +5,21 @@ from __future__ import annotations
 import urllib.parse
 from typing import TYPE_CHECKING, cast
 
-from music_assistant_models.enums import AlbumType, ImageType, MediaType
+from music_assistant_models.api import SortOptionInfo
+from music_assistant_models.enums import (
+    AlbumType,
+    ImageType,
+    ListingType,
+    MediaType,
+    SortDirection,
+    SortField,
+)
 from music_assistant_models.helpers import create_sort_name
 from music_assistant_models.media_items import (
     Album,
     Artist,
     Audiobook,
+    Genre,
     ItemMapping,
     MediaItemImage,
     MediaItemMetadata,
@@ -25,6 +34,7 @@ from music_assistant_models.media_items import (
     media_from_dict,
 )
 
+from .constants import RANDOM_SEED_SCHEMA_VERSION, TYPED_LISTING_SCHEMA_VERSION
 from .helpers import LinkedUser, impersonation_arg
 
 if TYPE_CHECKING:
@@ -33,12 +43,41 @@ if TYPE_CHECKING:
     from .client import MusicAssistantClient
 
 
+def _listing_require_schema(
+    sort_field: SortField | None,
+    sort_direction: SortDirection | None,
+    random_seed: int | None,
+    *,
+    has_paging: bool = False,
+    user: bool = False,
+) -> int | None:
+    """Return the minimum API schema needed by the requested listing options."""
+    if random_seed is not None:
+        return RANDOM_SEED_SCHEMA_VERSION
+    if sort_field is not None or sort_direction is not None or has_paging:
+        return TYPED_LISTING_SCHEMA_VERSION
+    if user:
+        return 35
+    return None
+
+
 class Music:
     """Music(library) related endpoints/data for Music Assistant."""
 
     def __init__(self, client: MusicAssistantClient) -> None:
         """Handle Initialization."""
         self.client = client
+
+    async def get_sort_options(self, listing: ListingType) -> list[SortOptionInfo]:
+        """Get the sort options offered by a listing, with the default first."""
+        return [
+            SortOptionInfo.from_dict(item)
+            for item in await self.client.send_command(
+                "music/sort_options",
+                listing=listing,
+                require_schema=96,
+            )
+        ]
 
     #  Tracks related endpoints/commands
 
@@ -51,6 +90,10 @@ class Music:
         order_by: str | None = None,
         provider: str | list[str] | None = None,
         user: str | None = None,
+        *,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        random_seed: int | None = None,
     ) -> list[Track]:
         """Get Track listing from the server.
 
@@ -58,7 +101,10 @@ class Music:
         :param search: Filter by search query.
         :param limit: Maximum number of items to return.
         :param offset: Number of items to skip.
-        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param order_by: Deprecated sort key; use sort_field and sort_direction instead.
+        :param sort_field: Typed sort field.
+        :param sort_direction: Direction for the selected sort field.
+        :param random_seed: Keep random ordering stable across pages.
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
             username). Requires the authenticated client to have sufficient permissions.
@@ -72,9 +118,14 @@ class Music:
                 limit=limit,
                 offset=offset,
                 order_by=order_by,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                random_seed=random_seed,
                 provider=provider,
                 user=user,
-                require_schema=35 if user else None,
+                require_schema=_listing_require_schema(
+                    sort_field, sort_direction, random_seed, user=user is not None
+                ),
             )
         ]
 
@@ -98,14 +149,33 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
     ) -> list[Track]:
-        """Get all other versions for given Track from the server."""
+        """Get a page of other track versions from the server."""
         return [
             Track.from_dict(item)
             for item in await self.client.send_command(
                 "music/tracks/track_versions",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(value is not None for value in (search, limit, offset)),
+                ),
             )
         ]
 
@@ -114,8 +184,15 @@ class Music:
         item_id: str,
         provider_instance_id_or_domain: str,
         in_library_only: bool = False,
+        *,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
     ) -> list[Album]:
-        """Get all (known) albums this track is featured on."""
+        """Get a page of (known) albums this track is featured on."""
         return [
             Album.from_dict(item)
             for item in await self.client.send_command(
@@ -123,6 +200,18 @@ class Music:
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
                 in_library_only=in_library_only,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(value is not None for value in (search, limit, offset)),
+                ),
             )
         ]
 
@@ -138,7 +227,7 @@ class Music:
 
     #  Albums related endpoints/commands
 
-    async def get_library_albums(
+    async def get_library_albums(  # noqa: PLR0913
         self,
         favorite: bool | None = None,
         search: str | None = None,
@@ -148,6 +237,10 @@ class Music:
         album_types: list[AlbumType] | None = None,
         provider: str | list[str] | None = None,
         user: str | None = None,
+        *,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        random_seed: int | None = None,
     ) -> list[Album]:
         """Get Albums listing from the server.
 
@@ -155,7 +248,7 @@ class Music:
         :param search: Filter by search query.
         :param limit: Maximum number of items to return.
         :param offset: Number of items to skip.
-        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param order_by: Deprecated sort key; use sort_field and sort_direction instead.
         :param album_types: Filter by album types.
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
@@ -170,10 +263,15 @@ class Music:
                 limit=limit,
                 offset=offset,
                 order_by=order_by,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                random_seed=random_seed,
                 album_types=album_types,
                 provider=provider,
                 user=user,
-                require_schema=35 if user else None,
+                require_schema=_listing_require_schema(
+                    sort_field, sort_direction, random_seed, user=user is not None
+                ),
             )
         ]
 
@@ -196,8 +294,16 @@ class Music:
         item_id: str,
         provider_instance_id_or_domain: str,
         in_library_only: bool = False,
+        *,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        favorite: bool | None = None,
+        random_seed: int | None = None,
     ) -> list[Track]:
-        """Get tracks for given album."""
+        """Get a searched, sorted and paged listing of tracks for an album."""
         return [
             Track.from_dict(item)
             for item in await self.client.send_command(
@@ -205,6 +311,21 @@ class Music:
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
                 in_library_only=in_library_only,
+                search=search,
+                limit=limit,
+                offset=offset,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                favorite=favorite,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(
+                        value is not None for value in (search, limit, offset, favorite)
+                    ),
+                ),
             )
         ]
 
@@ -212,20 +333,39 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
     ) -> list[Album]:
-        """Get all other versions for given Album from the server."""
+        """Get a page of other album versions from the server."""
         return [
             Album.from_dict(item)
             for item in await self.client.send_command(
                 "music/albums/album_versions",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(value is not None for value in (search, limit, offset)),
+                ),
             )
         ]
 
     #  Artist related endpoints/commands
 
-    async def get_library_artists(
+    async def get_library_artists(  # noqa: PLR0913
         self,
         favorite: bool | None = None,
         search: str | None = None,
@@ -235,6 +375,10 @@ class Music:
         album_artists_only: bool = False,
         provider: str | list[str] | None = None,
         user: str | None = None,
+        *,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        random_seed: int | None = None,
     ) -> list[Artist]:
         """Get Artists listing from the server.
 
@@ -242,7 +386,7 @@ class Music:
         :param search: Filter by search query.
         :param limit: Maximum number of items to return.
         :param offset: Number of items to skip.
-        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param order_by: Deprecated sort key; use sort_field and sort_direction instead.
         :param album_artists_only: Only return artists that have albums.
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
@@ -257,10 +401,15 @@ class Music:
                 limit=limit,
                 offset=offset,
                 order_by=order_by,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                random_seed=random_seed,
                 album_artists_only=album_artists_only,
                 provider=provider,
                 user=user,
-                require_schema=35 if user else None,
+                require_schema=_listing_require_schema(
+                    sort_field, sort_direction, random_seed, user=user is not None
+                ),
             )
         ]
 
@@ -278,13 +427,22 @@ class Music:
             ),
         )
 
-    async def get_artist_tracks(
+    async def get_artist_tracks(  # noqa: PLR0913
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
         in_library_only: bool = False,
+        *,
+        provider_filter: str | None = None,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        favorite: bool | None = None,
+        random_seed: int | None = None,
     ) -> list[Track]:
-        """Get (top)tracks for given artist."""
+        """Get a searched, sorted and paged artist track listing."""
         return [
             Track.from_dict(item)
             for item in await self.client.send_command(
@@ -292,16 +450,43 @@ class Music:
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
                 in_library_only=in_library_only,
+                provider_filter=provider_filter,
+                search=search,
+                limit=limit,
+                offset=offset,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                favorite=favorite,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(
+                        value is not None
+                        for value in (provider_filter, search, limit, offset, favorite)
+                    ),
+                ),
             )
         ]
 
-    async def get_artist_albums(
+    async def get_artist_albums(  # noqa: PLR0913
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
         in_library_only: bool = False,
+        *,
+        provider_filter: str | None = None,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        album_types: list[AlbumType] | None = None,
+        favorite: bool | None = None,
+        random_seed: int | None = None,
     ) -> list[Album]:
-        """Get (top)albums for given artist."""
+        """Get a searched, sorted and paged artist album listing."""
         return [
             Album.from_dict(item)
             for item in await self.client.send_command(
@@ -309,6 +494,31 @@ class Music:
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
                 in_library_only=in_library_only,
+                provider_filter=provider_filter,
+                search=search,
+                limit=limit,
+                offset=offset,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                album_types=album_types,
+                favorite=favorite,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(
+                        value is not None
+                        for value in (
+                            provider_filter,
+                            search,
+                            limit,
+                            offset,
+                            album_types,
+                            favorite,
+                        )
+                    ),
+                ),
             )
         ]
 
@@ -323,6 +533,10 @@ class Music:
         order_by: str | None = None,
         provider: str | list[str] | None = None,
         user: str | None = None,
+        *,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        random_seed: int | None = None,
     ) -> list[Playlist]:
         """Get Playlists listing from the server.
 
@@ -330,7 +544,7 @@ class Music:
         :param search: Filter by search query.
         :param limit: Maximum number of items to return.
         :param offset: Number of items to skip.
-        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param order_by: Deprecated sort key; use sort_field and sort_direction instead.
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
             username). Requires the authenticated client to have sufficient permissions.
@@ -344,9 +558,14 @@ class Music:
                 limit=limit,
                 offset=offset,
                 order_by=order_by,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                random_seed=random_seed,
                 provider=provider,
                 user=user,
-                require_schema=35 if user else None,
+                require_schema=_listing_require_schema(
+                    sort_field, sort_direction, random_seed, user=user is not None
+                ),
             )
         ]
 
@@ -364,14 +583,24 @@ class Music:
             ),
         )
 
-    async def get_playlist_tracks(
+    async def get_playlist_tracks(  # noqa: PLR0913
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
         force_refresh: bool = False,
+        *,
+        allow_dynamic_tracks: bool = True,
+        strict_provider_instance: bool = False,
+        favorite: bool | None = None,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
     ) -> list[Track]:
         """
-        Get all tracks for given playlist.
+        Get a page of tracks for the given playlist.
 
         :param force_refresh: Force a refresh of the (cached) playlist tracks.
         """
@@ -382,6 +611,23 @@ class Music:
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
                 force_refresh=force_refresh,
+                allow_dynamic_tracks=allow_dynamic_tracks,
+                strict_provider_instance=strict_provider_instance,
+                favorite=favorite,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(
+                        value is not None for value in (favorite, search, limit, offset)
+                    ),
+                ),
             )
         ]
 
@@ -426,6 +672,10 @@ class Music:
         order_by: str | None = None,
         provider: str | list[str] | None = None,
         user: str | None = None,
+        *,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        random_seed: int | None = None,
     ) -> list[Audiobook]:
         """Get Audiobooks listing from the server.
 
@@ -433,7 +683,7 @@ class Music:
         :param search: Filter by search query.
         :param limit: Maximum number of items to return.
         :param offset: Number of items to skip.
-        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param order_by: Deprecated sort key; use sort_field and sort_direction instead.
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
             username). Requires the authenticated client to have sufficient permissions.
@@ -447,9 +697,14 @@ class Music:
                 limit=limit,
                 offset=offset,
                 order_by=order_by,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                random_seed=random_seed,
                 provider=provider,
                 user=user,
-                require_schema=35 if user else None,
+                require_schema=_listing_require_schema(
+                    sort_field, sort_direction, random_seed, user=user is not None
+                ),
             )
         ]
 
@@ -478,6 +733,10 @@ class Music:
         order_by: str | None = None,
         provider: str | list[str] | None = None,
         user: str | None = None,
+        *,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        random_seed: int | None = None,
     ) -> list[Podcast]:
         """Get Podcasts listing from the server.
 
@@ -485,7 +744,7 @@ class Music:
         :param search: Filter by search query.
         :param limit: Maximum number of items to return.
         :param offset: Number of items to skip.
-        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param order_by: Deprecated sort key; use sort_field and sort_direction instead.
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
             username). Requires the authenticated client to have sufficient permissions.
@@ -499,9 +758,14 @@ class Music:
                 limit=limit,
                 offset=offset,
                 order_by=order_by,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                random_seed=random_seed,
                 provider=provider,
                 user=user,
-                require_schema=35 if user else None,
+                require_schema=_listing_require_schema(
+                    sort_field, sort_direction, random_seed, user=user is not None
+                ),
             )
         ]
 
@@ -523,14 +787,46 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        fully_played: bool | None = None,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        exclude_item_id: str | None = None,
+        random_seed: int | None = None,
     ) -> list[PodcastEpisode]:
-        """Get episodes for given podcast."""
+        """Get a page of episodes for the given podcast."""
         return [
             PodcastEpisode.from_dict(obj)
             for obj in await self.client.send_command(
                 "music/podcasts/podcast_episodes",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                fully_played=fully_played,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                exclude_item_id=exclude_item_id,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(
+                        value is not None
+                        for value in (
+                            fully_played,
+                            search,
+                            limit,
+                            offset,
+                            exclude_item_id,
+                        )
+                    ),
+                ),
             )
         ]
 
@@ -545,6 +841,10 @@ class Music:
         order_by: str | None = None,
         provider: str | list[str] | None = None,
         user: str | None = None,
+        *,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        random_seed: int | None = None,
     ) -> list[Radio]:
         """Get Radio listing from the server.
 
@@ -552,7 +852,7 @@ class Music:
         :param search: Filter by search query.
         :param limit: Maximum number of items to return.
         :param offset: Number of items to skip.
-        :param order_by: Order by field (e.g. 'sort_name', 'timestamp_added').
+        :param order_by: Deprecated sort key; use sort_field and sort_direction instead.
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
             username). Requires the authenticated client to have sufficient permissions.
@@ -566,9 +866,125 @@ class Music:
                 limit=limit,
                 offset=offset,
                 order_by=order_by,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                random_seed=random_seed,
                 provider=provider,
                 user=user,
-                require_schema=35 if user else None,
+                require_schema=_listing_require_schema(
+                    sort_field, sort_direction, random_seed, user=user is not None
+                ),
+            )
+        ]
+
+    async def get_library_genres(  # noqa: PLR0913, PLR0917
+        self,
+        favorite: bool | None = None,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        order_by: str | None = None,
+        provider: str | list[str] | None = None,
+        genre: int | list[int] | None = None,
+        played_only: bool = False,
+        hide_empty: bool | None = None,
+        media_type: MediaType | None = None,
+        content_type: str | None = None,
+        summary: bool = True,
+        *,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        random_seed: int | None = None,
+    ) -> list[Genre]:
+        """Get a searched, sorted and paged genre listing."""
+        return [
+            Genre.from_dict(obj)
+            for obj in await self.client.send_command(
+                "music/genres/library_items",
+                favorite=favorite,
+                search=search,
+                limit=limit,
+                offset=offset,
+                order_by=order_by,
+                provider=provider,
+                genre=genre,
+                played_only=played_only,
+                hide_empty=hide_empty,
+                media_type=media_type,
+                content_type=content_type,
+                summary=summary,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(sort_field, sort_direction, random_seed),
+            )
+        ]
+
+    async def get_genre_tracks(
+        self,
+        item_id: str | int,
+        limit: int | None = None,
+        offset: int | None = None,
+        order_by: str | None = None,
+        *,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        search: str | None = None,
+        random_seed: int | None = None,
+    ) -> list[Track]:
+        """Get a searched, sorted and paged listing of tracks mapped to a genre."""
+        return [
+            Track.from_dict(obj)
+            for obj in await self.client.send_command(
+                "music/genres/tracks",
+                item_id=item_id,
+                limit=limit,
+                offset=offset,
+                order_by=order_by,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                search=search,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(value is not None for value in (limit, offset, search)),
+                ),
+            )
+        ]
+
+    async def get_genre_albums(
+        self,
+        item_id: str | int,
+        limit: int | None = None,
+        offset: int | None = None,
+        order_by: str | None = None,
+        *,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        search: str | None = None,
+        random_seed: int | None = None,
+    ) -> list[Album]:
+        """Get a searched, sorted and paged listing of albums mapped to a genre."""
+        return [
+            Album.from_dict(obj)
+            for obj in await self.client.send_command(
+                "music/genres/albums",
+                item_id=item_id,
+                limit=limit,
+                offset=offset,
+                order_by=order_by,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                search=search,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(value is not None for value in (limit, offset, search)),
+                ),
             )
         ]
 
@@ -590,14 +1006,33 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
     ) -> list[Radio]:
-        """Get all other versions for given Radio from the server."""
+        """Get a page of other radio versions from the server."""
         return [
             Radio.from_dict(item)
             for item in await self.client.send_command(
                 "music/radios/radio_versions",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(value is not None for value in (search, limit, offset)),
+                ),
             )
         ]
 
@@ -646,11 +1081,35 @@ class Music:
     async def browse(
         self,
         path: str | None = None,
+        *,
+        player_id: str | None = None,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
     ) -> list[MediaItemType | ItemMapping]:
-        """Browse Music providers."""
+        """Browse music providers with optional search, sorting and paging."""
         return [
             media_from_dict(obj)
-            for obj in await self.client.send_command("music/browse", path=path)
+            for obj in await self.client.send_command(
+                "music/browse",
+                path=path,
+                player_id=player_id,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(value is not None for value in (search, limit, offset)),
+                ),
+            )
         ]
 
     async def recently_played(
@@ -1182,14 +1641,33 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
     ) -> list[Audiobook]:
-        """Return all versions of an audiobook we can find on all providers."""
+        """Return a searched, sorted and paged listing of audiobook versions."""
         return [
             Audiobook.from_dict(obj)
             for obj in await self.client.send_command(
                 "music/audiobooks/audiobook_versions",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(value is not None for value in (search, limit, offset)),
+                ),
             )
         ]
 
@@ -1290,14 +1768,33 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
     ) -> list[Podcast]:
-        """Return all versions of an podcast we can find on all providers."""
+        """Return a searched, sorted and paged listing of podcast versions."""
         return [
             Podcast.from_dict(obj)
             for obj in await self.client.send_command(
                 "music/podcasts/podcast_versions",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(value is not None for value in (search, limit, offset)),
+                ),
             )
         ]
 
@@ -1394,8 +1891,15 @@ class Music:
         provider_instance_id_or_domain: str,
         limit: int | None = None,
         allow_lookup: bool | None = None,
+        *,
+        preferred_provider_instances: list[str] | None = None,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
     ) -> list[Track]:
-        """Get a list of similar tracks for the given track."""
+        """Get a searched, sorted and paged listing of similar tracks."""
         return [
             Track.from_dict(obj)
             for obj in await self.client.send_command(
@@ -1404,6 +1908,18 @@ class Music:
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
                 limit=limit,
                 allow_lookup=allow_lookup,
+                preferred_provider_instances=preferred_provider_instances,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=_listing_require_schema(
+                    sort_field,
+                    sort_direction,
+                    random_seed,
+                    has_paging=any(value is not None for value in (search, limit, offset)),
+                ),
             )
         ]
 

@@ -5,10 +5,17 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from music_assistant_models.enums import EventType, QueueOption, RepeatMode
+from music_assistant_models.enums import (
+    EventType,
+    QueueOption,
+    RepeatMode,
+    SortDirection,
+    SortField,
+)
 from music_assistant_models.player_queue import PlayerQueue
 from music_assistant_models.queue_item import QueueItem
 
+from .constants import TYPED_LISTING_SCHEMA_VERSION
 from .helpers import LinkedUser, impersonation_arg
 
 if TYPE_CHECKING:
@@ -211,6 +218,9 @@ class PlayerQueues:
         user: str | LinkedUser | None = None,
         username: str | None = None,
         sort_by: str | None = None,
+        *,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
     ) -> None:
         """
         Play media item(s) on the given queue.
@@ -226,7 +236,9 @@ class PlayerQueues:
           history when triggered from automation. Requires the authenticated client to have
           sufficient permissions.
         - username: Deprecated alias for user.
-        - sort_by: Optional sort key to order tracks before applying start_item.
+        - sort_by: Deprecated sort key; use sort_field and sort_direction instead.
+        - sort_field: Sort field to order album or playlist tracks before applying start_item.
+        - sort_direction: Direction for the selected sort field.
         """
         if (
             radio_mode
@@ -246,7 +258,14 @@ class PlayerQueues:
             option=option,
             radio_mode=radio_mode,
             start_item=start_item,
-            sort_by=sort_by,
+            sort_by=(sort_by if sort_field is None and sort_direction is None else None),
+            sort_field=sort_field,
+            sort_direction=sort_direction,
+            require_schema=(
+                TYPED_LISTING_SCHEMA_VERSION
+                if sort_field is not None or sort_direction is not None
+                else None
+            ),
             **impersonation_arg(self.client.server_info, user or username),
         )
 
