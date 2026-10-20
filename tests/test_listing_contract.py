@@ -126,10 +126,10 @@ async def test_get_sort_options_parses_server_models(send_command: AsyncMock, mu
 def test_schema_requirements_are_combined_without_ordering_assumptions() -> None:
     """Schema requirements are combined without ordering assumptions."""
     assert _listing_require_schema() is None
-    assert _listing_require_schema(None, None) is None
-    assert _listing_require_schema(110, 98, 96) == 110
-    assert _listing_require_schema(96, None, 110, 98) == 110
-    assert _listing_require_schema(None, 31, 35) == 35
+    assert _listing_require_schema((110, None), (98, None, None)) is None
+    assert _listing_require_schema((110, "x"), (98, 1), (96, True)) == 110
+    assert _listing_require_schema((96, "x"), (110, None), (98, 0)) == 98
+    assert _listing_require_schema((31, None, False), (35, "user")) == 35
 
 
 async def test_artist_listings_do_not_forward_deprecated_library_filter(
@@ -216,7 +216,7 @@ async def test_original_listing_filters_do_not_require_schema_96(
     """Original listing filters do not require schema 96."""
     for get_listing in (music.get_artist_tracks, music.get_artist_albums):
         await get_listing("item-id", "provider-id", provider_filter="provider-id")
-        assert send_command.await_args.kwargs["require_schema"] == 31
+        assert send_command.await_args.kwargs["require_schema"] == 32
         await get_listing("item-id", "provider-id", provider_filter="provider-id", limit=10)
         assert send_command.await_args.kwargs["require_schema"] == 92
         await get_listing("item-id", "provider-id", provider_filter="provider-id", favorite=False)
