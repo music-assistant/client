@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/music-assistant/client/compare/v1.6.0...v1.7.0) (2026-10-21)
+
+
+### Features
+
+* add typed listing support to the Python client ([#316](https://github.com/music-assistant/client/issues/316)) ([f37891f](https://github.com/music-assistant/client/commit/f37891f50b6e9529fdaaa82fdc2fa18d03153de9))
+
 ## [1.6.0](https://github.com/music-assistant/client/compare/v1.5.1...v1.6.0) (2026-09-30)
 
 
