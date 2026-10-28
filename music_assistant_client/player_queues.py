@@ -55,6 +55,7 @@ class PlayerQueues:
                 EventType.QUEUE_ADDED,
                 EventType.QUEUE_UPDATED,
                 EventType.QUEUE_TIME_UPDATED,
+                EventType.PLAYER_REMOVED,
             ),
         )
         # the initial items are retrieved after connect
@@ -329,6 +330,10 @@ class PlayerQueues:
             if queue := self._queues.get(event.object_id):
                 queue.elapsed_time = float(event.data)
                 queue.elapsed_time_last_updated = time.time()
+        elif event.event == EventType.PLAYER_REMOVED:
+            # the server has no queue removal event, a queue goes away with its player
+            assert event.object_id
+            self._queues.pop(event.object_id, None)
 
     def __iter__(self) -> Iterator[PlayerQueue]:
         """Iterate over (available) PlayerQueues."""
