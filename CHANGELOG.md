@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/music-assistant/client/compare/v1.7.0...v1.7.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* drop a removed player's queue from the cache ([#330](https://github.com/music-assistant/client/issues/330)) ([709d3b2](https://github.com/music-assistant/client/commit/709d3b2bdbc9ec14e4a1c4f88029080f56a1bc66))
+
 ## [1.7.0](https://github.com/music-assistant/client/compare/v1.6.0...v1.7.0) (2026-10-21)
 
 
