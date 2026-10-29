@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 
     from .client import MusicAssistantClient
 
-# TODO: set to the server schema that makes statistics/* a public api contract
-STATISTICS_SCHEMA_VERSION = 101
+# The statistics API, including complete plays_over_time results, requires schema 100.
+STATISTICS_SCHEMA_VERSION = 100
 
 StatisticsPeriod = Literal["today", "week", "month", "year", "all_time"]
 StatisticsGranularity = Literal["hour", "day", "week", "month"]
