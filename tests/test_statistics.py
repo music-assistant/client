@@ -7,7 +7,8 @@ from music_assistant_models.enums import MediaType
 from music_assistant_models.media_items import ItemMapping
 from music_assistant_models.statistics import ListeningTimeItem, TimeSeriesPoint, TopItemResult
 
-from music_assistant_client.statistics import STATISTICS_SCHEMA_VERSION, Statistics
+from music_assistant_client.constants import STATISTICS_SCHEMA_VERSION
+from music_assistant_client.statistics import Statistics
 
 ARTIST = {
     "item_id": "1",
