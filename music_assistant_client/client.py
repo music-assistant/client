@@ -44,6 +44,7 @@ from .metadata import Metadata
 from .music import Music
 from .player_queues import PlayerQueues
 from .players import Players
+from .statistics import Statistics
 
 if TYPE_CHECKING:
     from concurrent.futures import Future
@@ -100,6 +101,7 @@ class MusicAssistantClient:
         self._music = Music(self)
         self._metadata = Metadata(self)
         self._dashboard = Dashboard(self)
+        self._statistics = Statistics(self)
         # below items are retrieved after connect
         self._server_info: ServerInfoMessage | None = None
         self._provider_manifests: dict[str, ProviderManifest] = {}
@@ -154,6 +156,11 @@ class MusicAssistantClient:
     def dashboard(self) -> Dashboard:
         """Return Dashboard handler."""
         return self._dashboard
+
+    @property
+    def statistics(self) -> Statistics:
+        """Return Statistics handler."""
+        return self._statistics
 
     def get_provider_manifest(self, domain: str) -> ProviderManifest:
         """Return Provider manifests of single provider(domain)."""
