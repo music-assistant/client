@@ -1,6 +1,7 @@
 """Tests for typed listing API payloads."""
 
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -474,3 +475,34 @@ async def test_play_media_sends_typed_sort_and_schema_requirement(
         start_from_beginning=False,
         require_schema=95,
     )
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda client: client.music.get_track("track_1", "spotify", user="user_1"),
+        lambda client: client.music.get_item_by_uri("spotify://track/track_1", user="user_1"),
+        lambda client: client.player_queues.play("queue_1", user="user_1"),
+        lambda client: client.player_queues.get_active_queue("player_1", user="user_1"),
+    ],
+    ids=["get_track", "get_item_by_uri", "queue_play", "get_active_queue"],
+)
+async def test_user_is_refused_by_an_older_server_before_sending(
+    older_server_client: tuple[MusicAssistantClient, AsyncMock], call: Any
+) -> None:
+    """An older server would run the command as the caller, so it is never sent."""
+    client, send_message = older_server_client
+    with pytest.raises(InvalidServerVersion):
+        await call(client)
+    send_message.assert_not_awaited()
+
+
+async def test_user_is_only_sent_when_given(send_command: AsyncMock, queues: PlayerQueues) -> None:
+    """Without a user no user argument goes out; with one, the server alone answers."""
+    send_command.return_value = None
+    await queues.play("queue_1")
+    assert "user" not in send_command.await_args.kwargs
+    assert "username" not in send_command.await_args.kwargs
+    # the fixture's client has no player cache, so a fallback to it would raise
+    assert await queues.get_active_queue("player_1", user="user_1") is None
+    assert send_command.await_args.kwargs["user"] == "user_1"

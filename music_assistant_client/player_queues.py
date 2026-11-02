@@ -109,15 +109,17 @@ class PlayerQueues:
             it is another user.
         """
         assert self.client.server_info  # for type checking
-        if self.client.server_info.schema_version >= 27:  # noqa: SIM102
-            # from schema version 27+, the server can handle this natively
-            if result := await self.client.send_command(
+        # from schema version 27+, the server can handle this natively; another user's queue
+        # only ever comes from the server, never from this connection's cache
+        if self.client.server_info.schema_version >= 27 or user is not None:
+            result = await self.client.send_command(
                 "player_queues/get_active_queue",
                 player_id=player_id,
                 require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
                 **impersonation_arg(self.client.server_info, user),
-            ):
-                return PlayerQueue.from_dict(result)
+            )
+            if result or user is not None:
+                return PlayerQueue.from_dict(result) if result else None
         if player := self.client.players.get(player_id):
             return self.get(player.active_source or player.player_id)
         return None
