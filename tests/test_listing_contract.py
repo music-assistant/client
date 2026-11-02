@@ -7,7 +7,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiohttp import ClientSession
 from music_assistant_models.api import ServerInfoMessage
-from music_assistant_models.enums import AlbumType, ListingType, SortDirection, SortField
+from music_assistant_models.enums import (
+    AlbumType,
+    ListingType,
+    MediaType,
+    SortDirection,
+    SortField,
+)
+from music_assistant_models.media_items import ItemMapping, PodcastEpisode, Track
 
 from music_assistant_client.client import MusicAssistantClient
 from music_assistant_client.exceptions import InvalidServerVersion
@@ -315,6 +322,29 @@ async def test_playlist_tracks_sends_paging_and_random_seed(
         random_seed=42,
         require_schema=98,
     )
+
+
+async def test_playlist_tracks_keep_their_media_type(send_command: AsyncMock, music: Music) -> None:
+    """A playlist mixing tracks and episodes returns each item as its own type."""
+    items = [
+        Track(item_id="track_1", provider="library", name="Track 1", provider_mappings=set()),
+        PodcastEpisode(
+            item_id="episode_1",
+            provider="library",
+            name="Episode 1",
+            provider_mappings=set(),
+            position=1,
+            podcast=ItemMapping(
+                item_id="podcast_1",
+                provider="library",
+                name="Podcast 1",
+                media_type=MediaType.PODCAST,
+            ),
+        ),
+    ]
+    send_command.return_value = [item.to_dict() for item in items]
+    result = await music.get_playlist_tracks("playlist_1", "library")
+    assert [type(item) for item in result] == [Track, PodcastEpisode]
 
 
 async def test_podcast_episodes_sends_filters_and_paging(

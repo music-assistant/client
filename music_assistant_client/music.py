@@ -813,9 +813,9 @@ class Music:
         offset: int | None = None,
         random_seed: int | None = None,
         user: str | LinkedUser | None = None,
-    ) -> list[Track]:
+    ) -> list[Track | Radio | PodcastEpisode | Audiobook | SoundEffect]:
         """
-        Get a page of tracks for the given playlist.
+        Get a page of items for the given playlist.
 
         :param force_refresh: Force a refresh of the (cached) playlist tracks.
         :param user: Run the command on behalf of this user: a user_id or username, or a
@@ -823,7 +823,7 @@ class Music:
             it is another user.
         """
         return [
-            Track.from_dict(obj)
+            cast("Track | Radio | PodcastEpisode | Audiobook | SoundEffect", media_from_dict(obj))
             for obj in await self.client.send_command(
                 "music/playlists/playlist_tracks",
                 item_id=item_id,
