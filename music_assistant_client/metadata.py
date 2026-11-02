@@ -6,8 +6,10 @@ from typing import TYPE_CHECKING, cast
 
 from music_assistant_models.media_items import MediaItemPalette, media_from_dict
 
+from .helpers import LinkedUser, impersonation_arg
+
 if TYPE_CHECKING:
-    from music_assistant_models.media_items import MediaItemImage, MediaItemType
+    from music_assistant_models.media_items import MediaItemType, Track
 
     from .client import MusicAssistantClient
 
@@ -51,19 +53,51 @@ class Metadata:
             ),
         )
 
-    async def get_image_palette(
-        self,
-        image: MediaItemImage | str,
-    ) -> MediaItemPalette | None:
+    async def get_image_palette(self, image_id: str) -> MediaItemPalette | None:
         """
-        Get the color palette extracted from an image.
+        Get the color palette extracted from a (proxied) image.
 
-        :param image: A MediaItemImage to read colors from, or an image URL (either a
-            direct URL or an imageproxy URL as produced by `get_image_url`).
+        :param image_id: The imageproxy image id (the `proxy_id` field on a MediaItemImage).
         """
         result = await self.client.send_command(
             "metadata/get_image_palette",
-            image=image,
-            require_schema=32,
+            image_id=image_id,
+            require_schema=34,
         )
         return MediaItemPalette.from_dict(result) if result else None
+
+    async def get_track_lyrics(
+        self,
+        track: Track,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> tuple[str | None, str | None]:
+        """
+        Get lyrics for given track from metadata providers.
+
+        Returns a tuple of (lyrics, lrc_lyrics) if found.
+
+        :param track: The track to get the lyrics for.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when it
+            is another user.
+        """
+        lyrics, lrc_lyrics = await self.client.send_command(
+            "metadata/get_track_lyrics",
+            track=track,
+            require_schema=101,
+            **impersonation_arg(self.client.server_info, user),
+        )
+        return lyrics, lrc_lyrics
+
+    async def set_preferred_language(self, lang: str) -> None:
+        """
+        Set the preferred language.
+
+        Note that this will not modify any existing metadata, but will be used for future lookups.
+        """
+        await self.client.send_command(
+            "metadata/set_preferred_language",
+            lang=lang,
+            require_schema=101,
+        )

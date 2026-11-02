@@ -23,7 +23,10 @@ def send_command() -> AsyncMock:
 @pytest.fixture
 def music(send_command: AsyncMock) -> Music:
     """Provide music wrappers backed by the captured command transport."""
-    return Music(SimpleNamespace(send_command=send_command))  # type: ignore[arg-type]
+    client = SimpleNamespace(
+        send_command=send_command, server_info=SimpleNamespace(schema_version=98)
+    )
+    return Music(client)  # type: ignore[arg-type]
 
 
 @pytest.fixture
@@ -467,6 +470,7 @@ async def test_play_media_sends_typed_sort_and_schema_requirement(
         sort_by=None,
         sort_field=SortField.NAME,
         sort_direction=SortDirection.DESC,
+        shuffle=None,
+        start_from_beginning=False,
         require_schema=95,
-        user=None,
     )

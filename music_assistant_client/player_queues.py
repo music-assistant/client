@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
+from music_assistant_models.background_task import BackgroundTask
 from music_assistant_models.enums import (
     EventType,
     QueueOption,
@@ -15,7 +16,7 @@ from music_assistant_models.enums import (
 from music_assistant_models.player_queue import PlayerQueue
 from music_assistant_models.queue_item import QueueItem
 
-from .constants import PLAY_MEDIA_SORT_SCHEMA_VERSION
+from .constants import IMPERSONATION_SCHEMA_VERSION, PLAY_MEDIA_SORT_SCHEMA_VERSION
 from .helpers import LinkedUser, impersonation_arg
 
 if TYPE_CHECKING:
@@ -71,61 +72,176 @@ class PlayerQueues:
         return self._queues.get(queue_id)
 
     async def get_queue_items(
-        self, queue_id: str, limit: int = 500, offset: int = 0
+        self,
+        queue_id: str,
+        limit: int = 500,
+        offset: int = 0,
+        *,
+        user: str | LinkedUser | None = None,
     ) -> list[QueueItem]:
-        """Get all QueueItems for given PlayerQueue."""
+        """
+        Get all QueueItems for given PlayerQueue.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return [
             QueueItem.from_dict(obj)
             for obj in await self.client.send_command(
-                "player_queues/items", queue_id=queue_id, limit=limit, offset=offset
+                "player_queues/items",
+                queue_id=queue_id,
+                limit=limit,
+                offset=offset,
+                require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+                **impersonation_arg(self.client.server_info, user),
             )
         ]
 
-    async def get_active_queue(self, player_id: str) -> PlayerQueue | None:
-        """Return the current active/synced queue for a player."""
+    async def get_active_queue(
+        self, player_id: str, *, user: str | LinkedUser | None = None
+    ) -> PlayerQueue | None:
+        """
+        Return the current active/synced queue for a player.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         assert self.client.server_info  # for type checking
         if self.client.server_info.schema_version >= 27:  # noqa: SIM102
             # from schema version 27+, the server can handle this natively
             if result := await self.client.send_command(
-                "player_queues/get_active_queue", player_id=player_id
+                "player_queues/get_active_queue",
+                player_id=player_id,
+                require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+                **impersonation_arg(self.client.server_info, user),
             ):
                 return PlayerQueue.from_dict(result)
         if player := self.client.players.get(player_id):
             return self.get(player.active_source or player.player_id)
         return None
 
-    async def play(self, queue_id: str) -> None:
-        """Send PLAY command to given queue."""
-        await self.client.send_command("player_queues/play", queue_id=queue_id)
+    async def play(self, queue_id: str, *, user: str | LinkedUser | None = None) -> None:
+        """
+        Send PLAY command to given queue.
 
-    async def pause(self, queue_id: str) -> None:
-        """Send PAUSE command to given queue."""
-        await self.client.send_command("player_queues/pause", queue_id=queue_id)
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        await self.client.send_command(
+            "player_queues/play",
+            queue_id=queue_id,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
 
-    async def stop(self, queue_id: str) -> None:
-        """Send STOP command to given queue."""
-        await self.client.send_command("player_queues/stop", queue_id=queue_id)
+    async def pause(self, queue_id: str, *, user: str | LinkedUser | None = None) -> None:
+        """
+        Send PAUSE command to given queue.
 
-    async def resume(self, queue_id: str, fade_in: bool | None = None) -> None:
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        await self.client.send_command(
+            "player_queues/pause",
+            queue_id=queue_id,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
+
+    async def stop(self, queue_id: str, *, user: str | LinkedUser | None = None) -> None:
+        """
+        Send STOP command to given queue.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        await self.client.send_command(
+            "player_queues/stop",
+            queue_id=queue_id,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
+
+    async def resume(
+        self,
+        queue_id: str,
+        fade_in: bool | None = None,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> None:
         """Handle RESUME command for given queue.
 
-        - queue_id: queue_id of the queue to handle the command.
+        :param queue_id: queue_id of the queue to handle the command.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
         """
-        await self.client.send_command("player_queues/resume", queue_id=queue_id, fade_in=fade_in)
+        await self.client.send_command(
+            "player_queues/resume",
+            queue_id=queue_id,
+            fade_in=fade_in,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
 
-    async def next(self, queue_id: str) -> None:
-        """Send NEXT TRACK command to given queue."""
-        await self.client.send_command("player_queues/next", queue_id=queue_id)
+    async def next(self, queue_id: str, *, user: str | LinkedUser | None = None) -> None:
+        """
+        Send NEXT TRACK command to given queue.
 
-    async def previous(self, queue_id: str) -> None:
-        """Send PREVIOUS TRACK command to given queue."""
-        await self.client.send_command("player_queues/previous", queue_id=queue_id)
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        await self.client.send_command(
+            "player_queues/next",
+            queue_id=queue_id,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
 
-    async def clear(self, queue_id: str) -> None:
-        """Send CLEAR QUEUE command to given queue."""
-        await self.client.send_command("player_queues/clear", queue_id=queue_id)
+    async def previous(self, queue_id: str, *, user: str | LinkedUser | None = None) -> None:
+        """
+        Send PREVIOUS TRACK command to given queue.
 
-    async def move_item(self, queue_id: str, queue_item_id: str, pos_shift: int = 1) -> None:
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        await self.client.send_command(
+            "player_queues/previous",
+            queue_id=queue_id,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
+
+    async def clear(self, queue_id: str, *, user: str | LinkedUser | None = None) -> None:
+        """
+        Send CLEAR QUEUE command to given queue.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        await self.client.send_command(
+            "player_queues/clear",
+            queue_id=queue_id,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
+
+    async def move_item(
+        self,
+        queue_id: str,
+        queue_item_id: str,
+        pos_shift: int = 1,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> None:
         """
         Move queue item x up/down the queue.
 
@@ -135,6 +251,9 @@ class PlayerQueues:
         - pos_shift: move item x positions down if positive value
         - pos_shift: move item x positions up if negative value
         - pos_shift:  move item to top of queue as next item if 0
+        - user: Run the command on behalf of this user: a user_id or username, or a
+          LinkedUser reference by auth provider. Requires the users.impersonate scope when
+          it is another user.
 
         NOTE: Fails if the given QueueItem is already playing or loaded in the buffer.
         """
@@ -143,6 +262,8 @@ class PlayerQueues:
             queue_id=queue_id,
             queue_item_id=queue_item_id,
             pos_shift=pos_shift,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
         )
 
     async def move_up(self, queue_id: str, queue_item_id: str) -> None:
@@ -157,40 +278,198 @@ class PlayerQueues:
         """Move given queue item as next up in the queue."""
         await self.move_item(queue_id=queue_id, queue_item_id=queue_item_id, pos_shift=0)
 
-    async def delete_item(self, queue_id: str, item_id_or_index: int | str) -> None:
-        """Delete item (by id or index) from the queue."""
+    async def move_item_end(
+        self, queue_id: str, queue_item_id: str, *, user: str | LinkedUser | None = None
+    ) -> None:
+        """
+        Move queue item to the end of the queue.
+
+        :param queue_id: id of the queue to process this request.
+        :param queue_item_id: the item_id of the queueitem that needs to be moved.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         await self.client.send_command(
-            "player_queues/delete_item", queue_id=queue_id, item_id_or_index=item_id_or_index
+            "player_queues/move_item_end",
+            queue_id=queue_id,
+            queue_item_id=queue_item_id,
+            require_schema=101,
+            **impersonation_arg(self.client.server_info, user),
         )
 
-    async def seek(self, queue_id: str, position: int) -> None:
+    async def delete_item(
+        self,
+        queue_id: str,
+        item_id_or_index: int | str,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> None:
+        """
+        Delete item (by id or index) from the queue.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        await self.client.send_command(
+            "player_queues/delete_item",
+            queue_id=queue_id,
+            item_id_or_index=item_id_or_index,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
+
+    async def seek(
+        self, queue_id: str, position: int, *, user: str | LinkedUser | None = None
+    ) -> None:
         """
         Handle SEEK command for given queue.
 
         Parameters:
         - position: position in seconds to seek to in the current playing item.
+        - user: Run the command on behalf of this user: a user_id or username, or a
+          LinkedUser reference by auth provider. Requires the users.impersonate scope when
+          it is another user.
         """
-        await self.client.send_command("player_queues/seek", queue_id=queue_id, position=position)
+        await self.client.send_command(
+            "player_queues/seek",
+            queue_id=queue_id,
+            position=position,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
 
-    async def skip(self, queue_id: str, seconds: int) -> None:
+    async def skip(
+        self, queue_id: str, seconds: int, *, user: str | LinkedUser | None = None
+    ) -> None:
         """
         Handle SKIP command for given queue.
 
         Parameters:
         - seconds: number of seconds to skip in track. Use negative value to skip back.
+        - user: Run the command on behalf of this user: a user_id or username, or a
+          LinkedUser reference by auth provider. Requires the users.impersonate scope when
+          it is another user.
         """
-        await self.client.send_command("player_queues/skip", queue_id=queue_id, seconds=seconds)
-
-    async def shuffle(self, queue_id: str, shuffle_enabled: bool) -> None:
-        """Configure shuffle mode on the the queue."""
         await self.client.send_command(
-            "player_queues/shuffle", queue_id=queue_id, shuffle_enabled=shuffle_enabled
+            "player_queues/skip",
+            queue_id=queue_id,
+            seconds=seconds,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
         )
 
-    async def repeat(self, queue_id: str, repeat_mode: RepeatMode) -> None:
-        """Configure repeat mode on the the queue."""
+    async def shuffle(
+        self, queue_id: str, shuffle_enabled: bool, *, user: str | LinkedUser | None = None
+    ) -> None:
+        """
+        Configure shuffle mode on the the queue.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         await self.client.send_command(
-            "player_queues/repeat", queue_id=queue_id, repeat_mode=repeat_mode
+            "player_queues/shuffle",
+            queue_id=queue_id,
+            shuffle_enabled=shuffle_enabled,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
+
+    async def repeat(
+        self, queue_id: str, repeat_mode: RepeatMode, *, user: str | LinkedUser | None = None
+    ) -> None:
+        """
+        Configure repeat mode on the the queue.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        await self.client.send_command(
+            "player_queues/repeat",
+            queue_id=queue_id,
+            repeat_mode=repeat_mode,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
+
+    async def crossfade(
+        self, queue_id: str, crossfade_enabled: bool, *, user: str | LinkedUser | None = None
+    ) -> None:
+        """
+        Enable or disable crossfade on the queue.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        await self.client.send_command(
+            "player_queues/crossfade",
+            queue_id=queue_id,
+            crossfade_enabled=crossfade_enabled,
+            require_schema=101,
+            **impersonation_arg(self.client.server_info, user),
+        )
+
+    async def overlay(
+        self,
+        queue_id: str,
+        enabled: bool | None = None,
+        source: str | None = None,
+        volume: int | None = None,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> None:
+        """
+        Configure the audio overlay (a looping sound effect mixed into the queue's audio).
+
+        :param queue_id: queue_id of the queue to configure.
+        :param enabled: Enable or disable the audio overlay. Omit to leave unchanged.
+        :param source: URI of the sound effect item to mix in. Omit to leave unchanged.
+        :param volume: Overlay loudness relative to the music in percent
+            (0-200, 100 = equally loud). Omit to leave unchanged.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        await self.client.send_command(
+            "player_queues/overlay",
+            queue_id=queue_id,
+            enabled=enabled,
+            source=source,
+            volume=volume,
+            require_schema=101,
+            **impersonation_arg(self.client.server_info, user),
+        )
+
+    async def set_playback_speed(
+        self,
+        queue_id: str,
+        speed: float,
+        queue_item_id: str | None = None,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> None:
+        """
+        Set the playback speed for the given queue item (audiobooks and podcast episodes only).
+
+        :param queue_id: queue_id of the queue to configure.
+        :param speed: playback speed multiplier (0.5 to 3.0). 1.0 = normal speed.
+        :param queue_item_id: The queue item to set the speed for, the current item if omitted.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        await self.client.send_command(
+            "player_queues/set_playback_speed",
+            queue_id=queue_id,
+            speed=speed,
+            queue_item_id=queue_item_id,
+            require_schema=101,
+            **impersonation_arg(self.client.server_info, user),
         )
 
     async def play_index(
@@ -199,17 +478,27 @@ class PlayerQueues:
         index: int | str,
         seek_position: int = 0,
         fade_in: bool = False,
+        *,
+        user: str | LinkedUser | None = None,
     ) -> None:
-        """Play item at index (or item_id) X in queue."""
+        """
+        Play item at index (or item_id) X in queue.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         await self.client.send_command(
             "player_queues/play_index",
             queue_id=queue_id,
             index=index,
             seek_position=seek_position,
             fade_in=fade_in,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
         )
 
-    async def play_media(
+    async def play_media(  # noqa: PLR0913
         self,
         queue_id: str,
         media: MediaItemType | list[MediaItemType] | str | list[str],
@@ -222,6 +511,8 @@ class PlayerQueues:
         *,
         sort_field: SortField | None = None,
         sort_direction: SortDirection | None = None,
+        shuffle: bool | None = None,
+        start_from_beginning: bool = False,
     ) -> None:
         """
         Play media item(s) on the given queue.
@@ -241,6 +532,10 @@ class PlayerQueues:
           Ignored when sort_field is set; cannot be combined with sort_direction alone.
         - sort_field: Sort field to order album or playlist tracks before applying start_item.
         - sort_direction: Direction for the selected sort field.
+        - shuffle: Play the media shuffled (or explicitly in order), only for the options that
+          start playing right away. Omit to follow the queue's own shuffle setting.
+        - start_from_beginning: Start a podcast episode at position 0, ignoring any saved
+          resume position.
         """
         if sort_by is not None and sort_field is None and sort_direction is not None:
             raise ValueError(
@@ -268,11 +563,18 @@ class PlayerQueues:
             sort_by=(sort_by if sort_field is None else None),
             sort_field=sort_field,
             sort_direction=sort_direction,
-            require_schema=(
-                PLAY_MEDIA_SORT_SCHEMA_VERSION
-                if sort_field is not None or sort_direction is not None
-                else None
-            ),
+            shuffle=shuffle,
+            start_from_beginning=start_from_beginning,
+            require_schema=max(
+                (
+                    PLAY_MEDIA_SORT_SCHEMA_VERSION
+                    if sort_field is not None or sort_direction is not None
+                    else 0
+                ),
+                51 if shuffle is not None else 0,
+                40 if start_from_beginning else 0,
+            )
+            or None,
             **impersonation_arg(self.client.server_info, user or username),
         )
 
@@ -281,14 +583,41 @@ class PlayerQueues:
         source_queue_id: str,
         target_queue_id: str,
         auto_play: bool | None = None,
+        *,
+        user: str | LinkedUser | None = None,
     ) -> None:
-        """Transfer queue to another queue."""
+        """
+        Transfer queue to another queue.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         await self.client.send_command(
             "player_queues/transfer",
             source_queue_id=source_queue_id,
             target_queue_id=target_queue_id,
             auto_play=auto_play,
-            require_schema=25,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else 25,
+            **impersonation_arg(self.client.server_info, user),
+        )
+
+    async def autoplay(
+        self, queue_id: str, autoplay_enabled: bool, *, user: str | LinkedUser | None = None
+    ) -> None:
+        """
+        Configure the Autoplay setting on the queue.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        await self.client.send_command(
+            "player_queues/autoplay",
+            queue_id=queue_id,
+            autoplay_enabled=autoplay_enabled,
+            require_schema=101,
+            **impersonation_arg(self.client.server_info, user),
         )
 
     async def dont_stop_the_music(self, queue_id: str, dont_stop_the_music_enabled: bool) -> None:
@@ -299,11 +628,41 @@ class PlayerQueues:
             dont_stop_the_music_enabled=dont_stop_the_music_enabled,
         )
 
-    async def play_pause(self, queue_id: str) -> None:
-        """Toggle play/pause on given playerqueue."""
+    async def play_pause(self, queue_id: str, *, user: str | LinkedUser | None = None) -> None:
+        """
+        Toggle play/pause on given playerqueue.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         await self.client.send_command(
             "player_queues/play_pause",
             queue_id=queue_id,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
+
+    async def save_as_playlist(
+        self, queue_id: str, name: str, *, user: str | LinkedUser | None = None
+    ) -> BackgroundTask:
+        """
+        Save the current queue items as a new playlist.
+
+        :param queue_id: The queue_id of the queue to save.
+        :param name: The name for the new playlist.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return BackgroundTask.from_dict(
+            await self.client.send_command(
+                "player_queues/save_as_playlist",
+                queue_id=queue_id,
+                name=name,
+                require_schema=101,
+                **impersonation_arg(self.client.server_info, user),
+            )
         )
 
     async def _get_player_queues(self) -> list[PlayerQueue]:
