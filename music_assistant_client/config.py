@@ -79,6 +79,7 @@ class Config:
             for x in await self.client.send_command(
                 "config/providers/get_entries",
                 instance_id=instance_id,
+                require_schema=40,
             )
         ]
 
