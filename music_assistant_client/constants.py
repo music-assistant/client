@@ -33,6 +33,9 @@ LISTING_FILTER_SCHEMA_VERSION: Final[int] = 96
 # Minimum server schema for stable seeded random ordering across pages.
 RANDOM_SEED_SCHEMA_VERSION: Final[int] = 98
 
+# Minimum server schema for the statistics API with complete plays_over_time results.
+STATISTICS_SCHEMA_VERSION: Final[int] = 100
+
 # Client contract checked against the server's min_supported_schema_version at connect time,
 # not a feature gate.
 API_SCHEMA_VERSION: Final[int] = 46
