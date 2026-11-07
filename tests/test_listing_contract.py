@@ -1,16 +1,36 @@
 """Tests for typed listing API payloads."""
 
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiohttp import ClientSession
 from music_assistant_models.api import ServerInfoMessage
-from music_assistant_models.enums import AlbumType, ListingType, SortDirection, SortField
+from music_assistant_models.config_entries import ConfigActionResult, ConfigEntry
+from music_assistant_models.enums import (
+    AlbumType,
+    ConfigEntryType,
+    ListingType,
+    MediaType,
+    SortDirection,
+    SortField,
+)
+from music_assistant_models.media_items import (
+    Audiobook,
+    BrowseFolder,
+    ItemMapping,
+    MediaCollection,
+    MediaItemTranscriptCue,
+    PodcastEpisode,
+    Track,
+)
+from music_assistant_models.setup_flow import FlowStepType, SetupFlowStep
 
 from music_assistant_client.client import MusicAssistantClient
+from music_assistant_client.config import Config
 from music_assistant_client.exceptions import InvalidServerVersion
-from music_assistant_client.music import Music, _listing_require_schema
+from music_assistant_client.music import Music, PodcastEpisodeTranscript, _listing_require_schema
 from music_assistant_client.player_queues import PlayerQueues
 
 
@@ -23,7 +43,10 @@ def send_command() -> AsyncMock:
 @pytest.fixture
 def music(send_command: AsyncMock) -> Music:
     """Provide music wrappers backed by the captured command transport."""
-    return Music(SimpleNamespace(send_command=send_command))  # type: ignore[arg-type]
+    client = SimpleNamespace(
+        send_command=send_command, server_info=SimpleNamespace(schema_version=98)
+    )
+    return Music(client)  # type: ignore[arg-type]
 
 
 @pytest.fixture
@@ -313,6 +336,29 @@ async def test_playlist_tracks_sends_paging_and_random_seed(
     )
 
 
+async def test_playlist_tracks_keep_their_media_type(send_command: AsyncMock, music: Music) -> None:
+    """A playlist mixing tracks and episodes returns each item as its own type."""
+    items = [
+        Track(item_id="track_1", provider="library", name="Track 1", provider_mappings=set()),
+        PodcastEpisode(
+            item_id="episode_1",
+            provider="library",
+            name="Episode 1",
+            provider_mappings=set(),
+            position=1,
+            podcast=ItemMapping(
+                item_id="podcast_1",
+                provider="library",
+                name="Podcast 1",
+                media_type=MediaType.PODCAST,
+            ),
+        ),
+    ]
+    send_command.return_value = [item.to_dict() for item in items]
+    result = await music.get_playlist_tracks("playlist_1", "library")
+    assert [type(item) for item in result] == [Track, PodcastEpisode]
+
+
 async def test_podcast_episodes_sends_filters_and_paging(
     send_command: AsyncMock, music: Music
 ) -> None:
@@ -467,6 +513,152 @@ async def test_play_media_sends_typed_sort_and_schema_requirement(
         sort_by=None,
         sort_field=SortField.NAME,
         sort_direction=SortDirection.DESC,
+        shuffle=None,
+        start_from_beginning=False,
         require_schema=95,
-        user=None,
     )
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda client: client.music.get_track("track_1", "spotify", user="user_1"),
+        lambda client: client.music.get_item_by_uri("spotify://track/track_1", user="user_1"),
+        lambda client: client.player_queues.play("queue_1", user="user_1"),
+        lambda client: client.player_queues.get_active_queue("player_1", user="user_1"),
+    ],
+    ids=["get_track", "get_item_by_uri", "queue_play", "get_active_queue"],
+)
+async def test_user_is_refused_by_an_older_server_before_sending(
+    older_server_client: tuple[MusicAssistantClient, AsyncMock], call: Any
+) -> None:
+    """An older server would run the command as the caller, so it is never sent."""
+    client, send_message = older_server_client
+    with pytest.raises(InvalidServerVersion):
+        await call(client)
+    send_message.assert_not_awaited()
+
+
+async def test_user_is_only_sent_when_given(send_command: AsyncMock, queues: PlayerQueues) -> None:
+    """Without a user no user argument goes out; with one, the server alone answers."""
+    send_command.return_value = None
+    await queues.play("queue_1")
+    assert "user" not in send_command.await_args.kwargs
+    assert "username" not in send_command.await_args.kwargs
+    # the fixture's client has no player cache, so a fallback to it would raise
+    assert await queues.get_active_queue("player_1", user="user_1") is None
+    assert send_command.await_args.kwargs["user"] == "user_1"
+
+
+@pytest.fixture
+def config(send_command: AsyncMock) -> Config:
+    """Provide config wrappers backed by the captured command transport."""
+    return Config(SimpleNamespace(send_command=send_command))  # type: ignore[arg-type]
+
+
+ENTRY = ConfigEntry(key="entry_1", type=ConfigEntryType.STRING, label="Entry 1")
+
+
+async def test_provider_config_entries_need_the_instance_only_schema(
+    send_command: AsyncMock, config: Config
+) -> None:
+    """Older servers still require the provider domain, so they are refused."""
+    send_command.return_value = [ENTRY.to_dict()]
+    assert await config.get_provider_config_entries("provider_1") == [ENTRY]
+    assert send_command.await_args.kwargs["require_schema"] == 40
+
+
+@pytest.mark.parametrize(
+    ("result", "expected"),
+    [
+        ([], []),
+        ([ENTRY.to_dict()], [ENTRY]),
+        ({"message": "Done"}, ConfigActionResult(message="Done")),
+    ],
+    ids=["nothing_to_report", "entries", "action_result"],
+)
+async def test_config_action_result_is_entries_or_result(
+    send_command: AsyncMock, config: Config, result: Any, expected: Any
+) -> None:
+    """A config action answers with entries to re-render or with an action result."""
+    send_command.return_value = result
+    assert await config.invoke_provider_config_action("provider_1", "action_1") == expected
+
+
+async def test_setup_flow_step_is_decoded(send_command: AsyncMock, config: Config) -> None:
+    """A setup flow step comes back with its type and form entries."""
+    step = SetupFlowStep(flow_id="flow_1", step_id="user", type=FlowStepType.FORM, entries=[ENTRY])
+    send_command.return_value = step.to_dict()
+    assert await config.setup_provider("spotify") == step
+    assert await config.submit_setup_flow("flow_1", {"entry_1": "value_1"}) == step
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda client: client.config.setup_provider("spotify"),
+        lambda client: client.config.submit_setup_flow("flow_1", {}),
+        lambda client: client.config.invoke_provider_config_action("provider_1", "action_1"),
+        lambda client: client.music.podcast_episode_transcript("episode_1", "library"),
+    ],
+    ids=["setup_provider", "submit_setup_flow", "invoke_action", "transcript"],
+)
+async def test_new_command_is_refused_by_an_older_server_before_sending(
+    older_server_client: tuple[MusicAssistantClient, AsyncMock], call: Any
+) -> None:
+    """A command the server does not know yet is never sent."""
+    client, send_message = older_server_client
+    with pytest.raises(InvalidServerVersion):
+        await call(client)
+    send_message.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("result", "expected"),
+    [
+        (
+            ["Hello", [{"start": 0.0, "end": 1.5, "text": "Hello"}]],
+            PodcastEpisodeTranscript(
+                text="Hello", cues=[MediaItemTranscriptCue(start=0.0, end=1.5, text="Hello")]
+            ),
+        ),
+        ([None, None], PodcastEpisodeTranscript(text=None, cues=None)),
+    ],
+    ids=["transcript", "no_transcript"],
+)
+async def test_podcast_episode_transcript_is_unpacked(
+    send_command: AsyncMock, music: Music, result: Any, expected: PodcastEpisodeTranscript
+) -> None:
+    """The transcript's text and timed cues are unpacked, both None without a transcript."""
+    send_command.return_value = result
+    assert await music.podcast_episode_transcript("episode_1", "library") == expected
+
+
+@pytest.mark.parametrize(
+    ("folder_or_collection", "item", "call"),
+    [
+        (
+            BrowseFolder(item_id="folder_1", provider="library", name="Folder 1"),
+            Track(item_id="track_1", provider="library", name="Track 1", provider_mappings=set()),
+            lambda music: music.recommendation_items("library", "row_1"),
+        ),
+        (
+            MediaCollection[Audiobook](
+                item_id="collection_1",
+                provider="library",
+                name="Collection 1",
+                provider_mappings=set(),
+            ),
+            Audiobook(item_id="book_1", provider="library", name="Book 1", provider_mappings=set()),
+            lambda music: music.artist_audiobooks("artist_1", "library"),
+        ),
+    ],
+    ids=["recommendation_items", "artist_audiobooks"],
+)
+async def test_listing_splits_folders_or_collections_from_items(
+    send_command: AsyncMock, music: Music, folder_or_collection: Any, item: Any, call: Any
+) -> None:
+    """A folder or collection keeps its own type next to the plain items."""
+    send_command.return_value = [folder_or_collection.to_dict(), item.to_dict()]
+    result = await call(music)
+    assert [type(entry) for entry in result] == [type(folder_or_collection), type(item)]
