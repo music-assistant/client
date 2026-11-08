@@ -48,6 +48,8 @@ def impersonation_arg(
     :param user: The user to impersonate (or None): a user_id or username string, or a
         LinkedUser dict referencing the user by auth provider (server schema >= 44).
     """
+    if user is None:
+        return {}
     schema_version = server_info.schema_version if server_info is not None else 0
     plain_user: str | None
     if isinstance(user, dict):

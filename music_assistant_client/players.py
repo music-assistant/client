@@ -6,13 +6,13 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from music_assistant_models.enums import EventType, MediaType
+from music_assistant_models.enums import EventType, MediaType, RepeatMode
 from music_assistant_models.errors import (
     MusicAssistantError,
     PlayerCommandFailed,
     PlayerUnavailableError,
 )
-from music_assistant_models.player import Player, PlayerMedia, PlayerOptionValueType, PlayerSource
+from music_assistant_models.player import Player, PlayerMedia, PlayerOptionValueType
 from music_assistant_models.player_control import PlayerControl
 
 if TYPE_CHECKING:
@@ -114,6 +114,44 @@ class Players:
         """Handle PREVIOUS TRACK command for given player."""
         await self.client.send_command("players/cmd/previous", player_id=player_id)
 
+    async def shuffle(
+        self, player_id: str, shuffle_enabled: bool, source_id: str | None = None
+    ) -> None:
+        """
+        Handle SHUFFLE command for whatever the given player is playing.
+
+        :param player_id: player_id of the player to handle the command.
+        :param shuffle_enabled: Whether to play the current content shuffled.
+        :param source_id: Optional source (id) the command is aimed at, as listed in the
+            player's source_list. The command is refused when that source is no longer playing.
+        """
+        await self.client.send_command(
+            "players/cmd/shuffle",
+            player_id=player_id,
+            shuffle_enabled=shuffle_enabled,
+            source_id=source_id,
+            require_schema=101,
+        )
+
+    async def repeat(
+        self, player_id: str, repeat_mode: RepeatMode, source_id: str | None = None
+    ) -> None:
+        """
+        Handle REPEAT command for whatever the given player is playing.
+
+        :param player_id: player_id of the player to handle the command.
+        :param repeat_mode: The repeat mode to apply.
+        :param source_id: Optional source (id) the command is aimed at, as listed in the
+            player's source_list. The command is refused when that source is no longer playing.
+        """
+        await self.client.send_command(
+            "players/cmd/repeat",
+            player_id=player_id,
+            repeat_mode=repeat_mode,
+            source_id=source_id,
+            require_schema=101,
+        )
+
     async def select_source(self, player_id: str, source: str) -> None:
         """
         Handle SELECT SOURCE command on given player.
@@ -197,18 +235,22 @@ class Players:
         pre_announce_url: str | None = None,
         message: str | None = None,
         tts_engine: str | None = None,
+        language: str | None = None,
     ) -> None:
         """
         Handle playback of an announcement on given player.
 
         Provide either a url to play or a message to speak, not both. Speaking a message
-        requires a server with api schema 46 or higher.
+        requires a server with api schema 46 or higher, a language schema 47 or higher.
+
+        :param language: Optional language code to speak the message in (e.g. 'nl-NL'),
+            omit to let the engine speak in the language it is configured for.
         """
         await self.client.send_command(
             "players/cmd/play_announcement",
             # speaking a message is only understood by a newer server; a url-only
             # announcement must keep working against every supported server
-            require_schema=46 if message or tts_engine else None,
+            require_schema=47 if language else 46 if message or tts_engine else None,
             player_id=player_id,
             url=url,
             pre_announce=pre_announce,
@@ -216,7 +258,15 @@ class Players:
             pre_announce_url=pre_announce_url,
             message=message,
             tts_engine=tts_engine,
+            language=language,
         )
+
+    async def tts_engines(self) -> list[dict[str, str]]:
+        """Return the TTS engines that can speak an announcement."""
+        result: list[dict[str, str]] = await self.client.send_command(
+            "players/tts_engines", require_schema=101
+        )
+        return result
 
     #  PlayerGroup related endpoints/commands
 
@@ -239,6 +289,15 @@ class Players:
     async def group_volume_down(self, player_id: str) -> None:
         """Send VOLUME_DOWN command to given playergroup."""
         await self.client.send_command("players/cmd/group_volume_down", player_id=player_id)
+
+    async def group_volume_mute(self, player_id: str, muted: bool) -> None:
+        """Send VOLUME_MUTE command to given playergroup (or synced players) as a whole."""
+        await self.client.send_command(
+            "players/cmd/group_volume_mute",
+            player_id=player_id,
+            muted=muted,
+            require_schema=101,
+        )
 
     async def add_currently_playing_to_favorites(self, player_id: str) -> None:
         """
@@ -389,24 +448,6 @@ class Players:
             PlayerControl.from_dict(item)
             for item in await self.client.send_command(
                 "players/player_controls",
-            )
-        ]
-
-    async def plugin_source(self, source_id: str) -> PlayerSource:
-        """Return PluginSource by source_id."""
-        return PlayerSource.from_dict(
-            await self.client.send_command(
-                "players/plugin_source",
-                source_id=source_id,
-            )
-        )
-
-    async def plugin_sources(self) -> list[PlayerSource]:
-        """Return all available plugin sources."""
-        return [
-            PlayerSource.from_dict(item)
-            for item in await self.client.send_command(
-                "players/plugin_sources",
             )
         ]
 

@@ -7,7 +7,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
 ]
-dependencies = ["aiohttp>=3.8.6", "music_assistant_models==1.1.232", "orjson>=3.9"]
+dependencies = ["aiohttp>=3.8.6", "music_assistant_models==1.1.236", "orjson>=3.9"]
 description = "Music Assistant Client"
 license = {text = "Apache-2.0"}
 name = "music_assistant_client"
@@ -20,14 +20,14 @@ version = "0.0.0"
 test = [
   "codespell==2.4.3",
   "isort==9.0.2",
-  "mypy==2.4.0",
+  "mypy==2.4.1",
   "pre-commit==4.7.0",
   "pre-commit-hooks==6.0.0",
-  "pytest==9.1.1",
-  "pytest-asyncio==1.4.0",
+  "pytest==9.2.0",
+  "pytest-asyncio==1.4.1",
   "pytest-cov==7.1.0",
   "tomli==2.5.0",
-  "ruff==0.17.2",
+  "ruff==0.17.3",
 ]
 
 [project.urls]

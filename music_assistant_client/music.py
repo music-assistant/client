@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import urllib.parse
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 from music_assistant_models.api import SortOptionInfo
+from music_assistant_models.background_task import BackgroundTask
 from music_assistant_models.enums import (
     AlbumType,
+    ArtistType,
+    ExternalID,
     ImageType,
     ListingType,
     MediaType,
+    PlaylistMatchPolicy,
+    ProviderSharing,
     SortDirection,
     SortField,
 )
@@ -19,17 +24,22 @@ from music_assistant_models.media_items import (
     Album,
     Artist,
     Audiobook,
+    BrowseFolder,
     Genre,
     ItemMapping,
+    MediaCollection,
     MediaItemImage,
     MediaItemMetadata,
+    MediaItemTranscriptCue,
     MediaItemType,
     Playlist,
     Podcast,
     PodcastEpisode,
+    ProviderMapping,
     Radio,
     RecommendationFolder,
     SearchResults,
+    SoundEffect,
     Track,
     media_from_dict,
 )
@@ -38,6 +48,7 @@ from .constants import (
     ALBUM_TRACKS_LISTING_SCHEMA_VERSION,
     ARTIST_LISTING_SCHEMA_VERSION,
     ARTIST_PROVIDER_FILTER_SCHEMA_VERSION,
+    IMPERSONATION_SCHEMA_VERSION,
     LIBRARY_USER_SCHEMA_VERSION,
     LISTING_FILTER_SCHEMA_VERSION,
     PLAYLIST_PODCAST_LISTING_SCHEMA_VERSION,
@@ -66,6 +77,13 @@ _LIBRARY_LISTINGS = frozenset(
         ListingType.LIBRARY_GENRES,
     }
 )
+
+
+class PodcastEpisodeTranscript(NamedTuple):
+    """Transcript of a podcast episode."""
+
+    text: str | None
+    cues: list[MediaItemTranscriptCue] | None
 
 
 def _listing_require_schema(*requirements: tuple[int, *tuple[object, ...]]) -> int | None:
@@ -100,7 +118,7 @@ class Music:
 
     #  Tracks related endpoints/commands
 
-    async def get_library_tracks(
+    async def get_library_tracks(  # noqa: PLR0913
         self,
         favorite: bool | None = None,
         search: str | None = None,
@@ -113,6 +131,10 @@ class Music:
         sort_field: SortField | None = None,
         sort_direction: SortDirection | None = None,
         random_seed: int | None = None,
+        genre: int | list[int] | None = None,
+        played_only: bool | None = None,
+        explicit: bool | None = None,
+        reachable_via: list[str] | None = None,
     ) -> list[Track]:
         """Get Track listing from the server.
 
@@ -127,6 +149,11 @@ class Music:
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
             username). Requires the authenticated client to have sufficient permissions.
+        :param genre: Filter by genre id(s).
+        :param played_only: Only include played tracks.
+        :param explicit: Filter by explicit content.
+        :param reachable_via: Only include tracks reachable through one of these provider
+            instance ids.
         """
         return [
             Track.from_dict(obj)
@@ -142,10 +169,15 @@ class Music:
                 random_seed=random_seed,
                 provider=provider,
                 user=user,
+                genre=genre,
+                played_only=played_only,
+                explicit=explicit,
+                reachable_via=reachable_via,
                 require_schema=_listing_require_schema(
                     (TYPED_LISTING_SCHEMA_VERSION, sort_field, sort_direction),
                     (LIBRARY_USER_SCHEMA_VERSION, user),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (101, genre, played_only, explicit, reachable_via),
                 ),
             )
         ]
@@ -155,14 +187,33 @@ class Music:
         item_id: str,
         provider_instance_id_or_domain: str,
         album_uri: str | None = None,
+        *,
+        allow_update_metadata: bool | None = None,
+        recursive: bool | None = None,
+        user: str | LinkedUser | None = None,
     ) -> Track:
-        """Get single Track from the server."""
+        """
+        Get single Track from the server.
+
+        :param allow_update_metadata: Schedule a metadata refresh on access.
+        :param recursive: Resolve the full album details.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return Track.from_dict(
             await self.client.send_command(
                 "music/tracks/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
                 album_uri=album_uri,
+                allow_update_metadata=allow_update_metadata,
+                recursive=recursive,
+                require_schema=_listing_require_schema(
+                    (101, allow_update_metadata, recursive),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
+                ),
+                **impersonation_arg(self.client.server_info, user),
             ),
         )
 
@@ -272,6 +323,9 @@ class Music:
         sort_field: SortField | None = None,
         sort_direction: SortDirection | None = None,
         random_seed: int | None = None,
+        genre: int | list[int] | None = None,
+        played_only: bool | None = None,
+        reachable_via: list[str] | None = None,
     ) -> list[Album]:
         """Get Albums listing from the server.
 
@@ -284,6 +338,10 @@ class Music:
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
             username). Requires the authenticated client to have sufficient permissions.
+        :param genre: Filter by genre id(s).
+        :param played_only: Only include played albums.
+        :param reachable_via: Only include albums reachable through one of these provider
+            instance ids.
         """
         return [
             Album.from_dict(obj)
@@ -300,10 +358,14 @@ class Music:
                 album_types=album_types,
                 provider=provider,
                 user=user,
+                genre=genre,
+                played_only=played_only,
+                reachable_via=reachable_via,
                 require_schema=_listing_require_schema(
                     (TYPED_LISTING_SCHEMA_VERSION, sort_field, sort_direction),
                     (LIBRARY_USER_SCHEMA_VERSION, user),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (101, genre, played_only, reachable_via),
                 ),
             )
         ]
@@ -312,17 +374,36 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        allow_update_metadata: bool | None = None,
+        recursive: bool | None = None,
+        user: str | LinkedUser | None = None,
     ) -> Album:
-        """Get single Album from the server."""
+        """
+        Get single Album from the server.
+
+        :param allow_update_metadata: Schedule a metadata refresh on access.
+        :param recursive: Resolve the full artist details.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return Album.from_dict(
             await self.client.send_command(
                 "music/albums/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                allow_update_metadata=allow_update_metadata,
+                recursive=recursive,
+                require_schema=_listing_require_schema(
+                    (101, allow_update_metadata, recursive),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
+                ),
+                **impersonation_arg(self.client.server_info, user),
             ),
         )
 
-    async def get_album_tracks(
+    async def get_album_tracks(  # noqa: PLR0913
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
@@ -335,8 +416,15 @@ class Music:
         sort_direction: SortDirection | None = None,
         favorite: bool | None = None,
         random_seed: int | None = None,
+        user: str | LinkedUser | None = None,
     ) -> list[Track]:
-        """Get a searched, sorted and paged listing of tracks for an album."""
+        """
+        Get a searched, sorted and paged listing of tracks for an album.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return [
             Track.from_dict(item)
             for item in await self.client.send_command(
@@ -362,7 +450,9 @@ class Music:
                     ),
                     (LISTING_FILTER_SCHEMA_VERSION, favorite),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
                 ),
+                **impersonation_arg(self.client.server_info, user),
             )
         ]
 
@@ -421,6 +511,10 @@ class Music:
         sort_field: SortField | None = None,
         sort_direction: SortDirection | None = None,
         random_seed: int | None = None,
+        genre: int | list[int] | None = None,
+        played_only: bool | None = None,
+        artist_type: ArtistType | None = None,
+        reachable_via: list[str] | None = None,
     ) -> list[Artist]:
         """Get Artists listing from the server.
 
@@ -433,6 +527,11 @@ class Music:
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
             username). Requires the authenticated client to have sufficient permissions.
+        :param genre: Filter by genre id(s).
+        :param played_only: Only include played artists.
+        :param artist_type: Only include artists of this type.
+        :param reachable_via: Only include artists reachable through one of these provider
+            instance ids.
         """
         return [
             Artist.from_dict(obj)
@@ -449,10 +548,15 @@ class Music:
                 album_artists_only=album_artists_only,
                 provider=provider,
                 user=user,
+                genre=genre,
+                played_only=played_only,
+                artist_type=artist_type,
+                reachable_via=reachable_via,
                 require_schema=_listing_require_schema(
                     (TYPED_LISTING_SCHEMA_VERSION, sort_field, sort_direction),
                     (LIBRARY_USER_SCHEMA_VERSION, user),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (101, genre, played_only, artist_type, reachable_via),
                 ),
             )
         ]
@@ -461,13 +565,29 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        allow_update_metadata: bool | None = None,
+        user: str | LinkedUser | None = None,
     ) -> Artist:
-        """Get single Artist from the server."""
+        """
+        Get single Artist from the server.
+
+        :param allow_update_metadata: Schedule a metadata refresh on access.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return Artist.from_dict(
             await self.client.send_command(
                 "music/artists/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                allow_update_metadata=allow_update_metadata,
+                require_schema=_listing_require_schema(
+                    (101, allow_update_metadata),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
+                ),
+                **impersonation_arg(self.client.server_info, user),
             ),
         )
 
@@ -485,11 +605,15 @@ class Music:
         sort_direction: SortDirection | None = None,
         favorite: bool | None = None,
         random_seed: int | None = None,
+        user: str | LinkedUser | None = None,
     ) -> list[Track]:
         """
         Get a searched, sorted and paged artist track listing.
 
         :param in_library_only: Deprecated and ignored; use provider_filter instead.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
         """
         del in_library_only
         return [
@@ -518,7 +642,9 @@ class Music:
                     (LISTING_FILTER_SCHEMA_VERSION, favorite),
                     (ARTIST_PROVIDER_FILTER_SCHEMA_VERSION, provider_filter),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
                 ),
+                **impersonation_arg(self.client.server_info, user),
             )
         ]
 
@@ -537,11 +663,15 @@ class Music:
         album_types: list[AlbumType] | None = None,
         favorite: bool | None = None,
         random_seed: int | None = None,
+        user: str | LinkedUser | None = None,
     ) -> list[Album]:
         """
         Get a searched, sorted and paged artist album listing.
 
         :param in_library_only: Deprecated and ignored; use provider_filter instead.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
         """
         del in_library_only
         return [
@@ -571,13 +701,15 @@ class Music:
                     (LISTING_FILTER_SCHEMA_VERSION, album_types, favorite),
                     (ARTIST_PROVIDER_FILTER_SCHEMA_VERSION, provider_filter),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
                 ),
+                **impersonation_arg(self.client.server_info, user),
             )
         ]
 
     #  Playlist related endpoints/commands
 
-    async def get_library_playlists(
+    async def get_library_playlists(  # noqa: PLR0913
         self,
         favorite: bool | None = None,
         search: str | None = None,
@@ -590,6 +722,9 @@ class Music:
         sort_field: SortField | None = None,
         sort_direction: SortDirection | None = None,
         random_seed: int | None = None,
+        genre: int | list[int] | None = None,
+        played_only: bool | None = None,
+        reachable_via: list[str] | None = None,
     ) -> list[Playlist]:
         """Get Playlists listing from the server.
 
@@ -601,6 +736,10 @@ class Music:
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
             username). Requires the authenticated client to have sufficient permissions.
+        :param genre: Filter by genre id(s).
+        :param played_only: Only include played playlists.
+        :param reachable_via: Only include playlists reachable through one of these provider
+            instance ids.
         """
         return [
             Playlist.from_dict(obj)
@@ -616,10 +755,14 @@ class Music:
                 random_seed=random_seed,
                 provider=provider,
                 user=user,
+                genre=genre,
+                played_only=played_only,
+                reachable_via=reachable_via,
                 require_schema=_listing_require_schema(
                     (TYPED_LISTING_SCHEMA_VERSION, sort_field, sort_direction),
                     (LIBRARY_USER_SCHEMA_VERSION, user),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (101, genre, played_only, reachable_via),
                 ),
             )
         ]
@@ -628,13 +771,29 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        allow_update_metadata: bool | None = None,
+        user: str | LinkedUser | None = None,
     ) -> Playlist:
-        """Get single Playlist from the server."""
+        """
+        Get single Playlist from the server.
+
+        :param allow_update_metadata: Schedule a metadata refresh on access.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return Playlist.from_dict(
             await self.client.send_command(
                 "music/playlists/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                allow_update_metadata=allow_update_metadata,
+                require_schema=_listing_require_schema(
+                    (101, allow_update_metadata),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
+                ),
+                **impersonation_arg(self.client.server_info, user),
             ),
         )
 
@@ -653,14 +812,18 @@ class Music:
         limit: int | None = None,
         offset: int | None = None,
         random_seed: int | None = None,
-    ) -> list[Track]:
+        user: str | LinkedUser | None = None,
+    ) -> list[Track | Radio | PodcastEpisode | Audiobook | SoundEffect]:
         """
-        Get a page of tracks for the given playlist.
+        Get a page of items for the given playlist.
 
         :param force_refresh: Force a refresh of the (cached) playlist tracks.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
         """
         return [
-            Track.from_dict(obj)
+            cast("Track | Radio | PodcastEpisode | Audiobook | SoundEffect", media_from_dict(obj))
             for obj in await self.client.send_command(
                 "music/playlists/playlist_tracks",
                 item_id=item_id,
@@ -686,43 +849,230 @@ class Music:
                         offset,
                     ),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
                 ),
+                **impersonation_arg(self.client.server_info, user),
             )
         ]
 
-    async def add_playlist_tracks(self, db_playlist_id: str | int, uris: list[str]) -> None:
-        """Add multiple tracks to playlist. Creates background tasks to process the action."""
-        await self.client.send_command(
+    async def add_playlist_tracks(
+        self,
+        db_playlist_id: str | int,
+        uris: list[str],
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> BackgroundTask | None:
+        """
+        Add multiple tracks to playlist. Creates background tasks to process the action.
+
+        Returns the background task on servers that report it.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        if result := await self.client.send_command(
             "music/playlists/add_playlist_tracks",
             db_playlist_id=db_playlist_id,
             uris=uris,
-        )
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        ):
+            return BackgroundTask.from_dict(result)
+        return None
 
     async def remove_playlist_tracks(
-        self, db_playlist_id: str | int, positions_to_remove: tuple[int, ...]
-    ) -> None:
-        """Remove multiple tracks from playlist."""
-        await self.client.send_command(
+        self,
+        db_playlist_id: str | int,
+        positions_to_remove: tuple[int, ...],
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> BackgroundTask | None:
+        """
+        Remove multiple tracks from playlist.
+
+        Returns the background task on servers that report it.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        if result := await self.client.send_command(
             "music/playlists/remove_playlist_tracks",
             db_playlist_id=db_playlist_id,
             positions_to_remove=positions_to_remove,
-        )
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        ):
+            return BackgroundTask.from_dict(result)
+        return None
 
     async def create_playlist(
-        self, name: str, provider_instance_or_domain: str | None = None
+        self,
+        name: str,
+        provider_instance_or_domain: str | None = None,
+        *,
+        media_types: list[MediaType] | None = None,
+        strict_provider_instance: bool | None = None,
+        user: str | LinkedUser | None = None,
     ) -> Playlist:
-        """Create new playlist."""
+        """
+        Create new playlist.
+
+        :param media_types: Media types the playlist must support.
+        :param strict_provider_instance: Do not fall back to another provider instance.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return Playlist.from_dict(
             await self.client.send_command(
                 "music/playlists/create_playlist",
                 name=name,
                 provider_instance_or_domain=provider_instance_or_domain,
+                media_types=media_types,
+                strict_provider_instance=strict_provider_instance,
+                require_schema=_listing_require_schema(
+                    (101, media_types, strict_provider_instance),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
+                ),
+                **impersonation_arg(self.client.server_info, user),
+            )
+        )
+
+    async def move_playlist_track(
+        self, db_playlist_id: str | int, from_position: int, to_position: int
+    ) -> None:
+        """
+        Move one item of a playlist to another position.
+
+        :param db_playlist_id: Library playlist id.
+        :param from_position: The current position of the item, 1-based.
+        :param to_position: The position the item ends up at after the move, 1-based.
+        """
+        await self.client.send_command(
+            "music/playlists/move_playlist_track",
+            db_playlist_id=db_playlist_id,
+            from_position=from_position,
+            to_position=to_position,
+            require_schema=101,
+        )
+
+    async def move_playlist_tracks(
+        self, db_playlist_id: str | int, positions: list[int], to_position: int | None = None
+    ) -> None:
+        """
+        Move items of a playlist as one block to another position.
+
+        :param db_playlist_id: Library playlist id.
+        :param positions: The current positions of the items, 1-based.
+        :param to_position: The position the block's first item ends up at, 1-based.
+            Omit it to move the items to the end of the playlist.
+        """
+        await self.client.send_command(
+            "music/playlists/move_playlist_tracks",
+            db_playlist_id=db_playlist_id,
+            positions=positions,
+            to_position=to_position,
+            require_schema=101,
+        )
+
+    async def export_playlist(self, db_playlist_id: str | int) -> str:
+        """Export a playlist to M3U8 format."""
+        return cast(
+            "str",
+            await self.client.send_command(
+                "music/playlists/export_playlist",
+                db_playlist_id=db_playlist_id,
+                require_schema=101,
+            ),
+        )
+
+    async def import_playlist(
+        self,
+        m3u_data: str,
+        library_matching: bool = False,
+        match_providers: list[str] | None = None,
+        match_policy: PlaylistMatchPolicy | None = None,
+    ) -> Playlist:
+        """
+        Import a playlist from M3U8 format.
+
+        :param m3u_data: The M3U8 playlist data as a string.
+        :param library_matching: Deprecated; use match_policy instead.
+        :param match_providers: Provider instances or domains to search when matching runs.
+        :param match_policy: Minimum substitute confidence. Leave unset to skip matching.
+        """
+        return Playlist.from_dict(
+            await self.client.send_command(
+                "music/playlists/import_playlist",
+                m3u_data=m3u_data,
+                library_matching=library_matching,
+                match_providers=match_providers,
+                match_policy=match_policy,
+                require_schema=101,
+            )
+        )
+
+    async def migrate_playlist(
+        self,
+        db_playlist_id: str | int,
+        destination_provider: str = "builtin",
+        name: str | None = None,
+        match_policy: PlaylistMatchPolicy = PlaylistMatchPolicy.SAME_RECORDING,
+    ) -> BackgroundTask:
+        """
+        Queue copying a playlist to another provider or Music Assistant.
+
+        :param db_playlist_id: Library database ID of the source playlist.
+        :param destination_provider: Destination provider instance ID or domain.
+        :param name: Optional destination playlist name.
+        :param match_policy: Lowest track-match confidence that may be accepted.
+        """
+        return BackgroundTask.from_dict(
+            await self.client.send_command(
+                "music/playlists/migrate_playlist",
+                db_playlist_id=db_playlist_id,
+                destination_provider=destination_provider,
+                name=name,
+                match_policy=match_policy,
+                require_schema=101,
+            )
+        )
+
+    async def set_playlist_access(
+        self,
+        item_id: str | int,
+        sharing: ProviderSharing,
+        owner: str | None = None,
+        shared_users: list[str] | None = None,
+        collaborative: bool = False,
+    ) -> Playlist:
+        """
+        Set who owns a Music Assistant playlist, who may see it and who may edit it.
+
+        :param item_id: Library id of the playlist.
+        :param sharing: Who, besides its owner, may see and play the playlist.
+        :param owner: User id of the member owning the playlist, None for a playlist of the
+            whole home.
+        :param shared_users: The user ids the playlist is shared with, SELECTED sharing only.
+        :param collaborative: Whether everyone the playlist is shared with may also edit it.
+        """
+        return Playlist.from_dict(
+            await self.client.send_command(
+                "music/playlists/set_access",
+                item_id=item_id,
+                sharing=sharing,
+                owner=owner,
+                shared_users=shared_users,
+                collaborative=collaborative,
+                require_schema=101,
             )
         )
 
     # Audiobooks related endpoints/commands
 
-    async def get_library_audiobooks(
+    async def get_library_audiobooks(  # noqa: PLR0913
         self,
         favorite: bool | None = None,
         search: str | None = None,
@@ -735,6 +1085,9 @@ class Music:
         sort_field: SortField | None = None,
         sort_direction: SortDirection | None = None,
         random_seed: int | None = None,
+        genre: int | list[int] | None = None,
+        played_only: bool | None = None,
+        reachable_via: list[str] | None = None,
     ) -> list[Audiobook]:
         """Get Audiobooks listing from the server.
 
@@ -746,6 +1099,10 @@ class Music:
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
             username). Requires the authenticated client to have sufficient permissions.
+        :param genre: Filter by genre id(s).
+        :param played_only: Only include played audiobooks.
+        :param reachable_via: Only include audiobooks reachable through one of these provider
+            instance ids.
         """
         return [
             Audiobook.from_dict(obj)
@@ -761,10 +1118,14 @@ class Music:
                 random_seed=random_seed,
                 provider=provider,
                 user=user,
+                genre=genre,
+                played_only=played_only,
+                reachable_via=reachable_via,
                 require_schema=_listing_require_schema(
                     (TYPED_LISTING_SCHEMA_VERSION, sort_field, sort_direction),
                     (LIBRARY_USER_SCHEMA_VERSION, user),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (101, genre, played_only, reachable_via),
                 ),
             )
         ]
@@ -773,19 +1134,35 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        allow_update_metadata: bool | None = None,
+        user: str | LinkedUser | None = None,
     ) -> Audiobook:
-        """Get single Audiobook from the server."""
+        """
+        Get single Audiobook from the server.
+
+        :param allow_update_metadata: Schedule a metadata refresh on access.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return Audiobook.from_dict(
             await self.client.send_command(
                 "music/audiobooks/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                allow_update_metadata=allow_update_metadata,
+                require_schema=_listing_require_schema(
+                    (101, allow_update_metadata),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
+                ),
+                **impersonation_arg(self.client.server_info, user),
             ),
         )
 
     # Podcasts related endpoints/commands
 
-    async def get_library_podcasts(
+    async def get_library_podcasts(  # noqa: PLR0913
         self,
         favorite: bool | None = None,
         search: str | None = None,
@@ -798,6 +1175,9 @@ class Music:
         sort_field: SortField | None = None,
         sort_direction: SortDirection | None = None,
         random_seed: int | None = None,
+        genre: int | list[int] | None = None,
+        played_only: bool | None = None,
+        reachable_via: list[str] | None = None,
     ) -> list[Podcast]:
         """Get Podcasts listing from the server.
 
@@ -809,6 +1189,10 @@ class Music:
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
             username). Requires the authenticated client to have sufficient permissions.
+        :param genre: Filter by genre id(s).
+        :param played_only: Only include played podcasts.
+        :param reachable_via: Only include podcasts reachable through one of these provider
+            instance ids.
         """
         return [
             Podcast.from_dict(obj)
@@ -824,10 +1208,14 @@ class Music:
                 random_seed=random_seed,
                 provider=provider,
                 user=user,
+                genre=genre,
+                played_only=played_only,
+                reachable_via=reachable_via,
                 require_schema=_listing_require_schema(
                     (TYPED_LISTING_SCHEMA_VERSION, sort_field, sort_direction),
                     (LIBRARY_USER_SCHEMA_VERSION, user),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (101, genre, played_only, reachable_via),
                 ),
             )
         ]
@@ -836,17 +1224,33 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        allow_update_metadata: bool | None = None,
+        user: str | LinkedUser | None = None,
     ) -> Podcast:
-        """Get single Podcast from the server."""
+        """
+        Get single Podcast from the server.
+
+        :param allow_update_metadata: Schedule a metadata refresh on access.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return Podcast.from_dict(
             await self.client.send_command(
                 "music/podcasts/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                allow_update_metadata=allow_update_metadata,
+                require_schema=_listing_require_schema(
+                    (101, allow_update_metadata),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
+                ),
+                **impersonation_arg(self.client.server_info, user),
             ),
         )
 
-    async def get_podcast_episodes(
+    async def get_podcast_episodes(  # noqa: PLR0913
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
@@ -859,8 +1263,15 @@ class Music:
         offset: int | None = None,
         exclude_item_id: str | None = None,
         random_seed: int | None = None,
+        user: str | LinkedUser | None = None,
     ) -> list[PodcastEpisode]:
-        """Get a page of episodes for the given podcast."""
+        """
+        Get a page of episodes for the given podcast.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return [
             PodcastEpisode.from_dict(obj)
             for obj in await self.client.send_command(
@@ -887,13 +1298,15 @@ class Music:
                     ),
                     (LISTING_FILTER_SCHEMA_VERSION, exclude_item_id),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
                 ),
+                **impersonation_arg(self.client.server_info, user),
             )
         ]
 
     #  Radio related endpoints/commands
 
-    async def get_library_radios(
+    async def get_library_radios(  # noqa: PLR0913
         self,
         favorite: bool | None = None,
         search: str | None = None,
@@ -906,6 +1319,9 @@ class Music:
         sort_field: SortField | None = None,
         sort_direction: SortDirection | None = None,
         random_seed: int | None = None,
+        genre: int | list[int] | None = None,
+        played_only: bool | None = None,
+        reachable_via: list[str] | None = None,
     ) -> list[Radio]:
         """Get Radio listing from the server.
 
@@ -917,6 +1333,10 @@ class Music:
         :param provider: Filter by provider instance ID or domain (single string or list).
         :param user: Optionally execute the request on behalf of this user (user_id or
             username). Requires the authenticated client to have sufficient permissions.
+        :param genre: Filter by genre id(s).
+        :param played_only: Only include played radios.
+        :param reachable_via: Only include radios reachable through one of these provider
+            instance ids.
         """
         return [
             Radio.from_dict(obj)
@@ -932,10 +1352,14 @@ class Music:
                 random_seed=random_seed,
                 provider=provider,
                 user=user,
+                genre=genre,
+                played_only=played_only,
+                reachable_via=reachable_via,
                 require_schema=_listing_require_schema(
                     (TYPED_LISTING_SCHEMA_VERSION, sort_field, sort_direction),
                     (LIBRARY_USER_SCHEMA_VERSION, user),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (101, genre, played_only, reachable_via),
                 ),
             )
         ]
@@ -957,6 +1381,7 @@ class Music:
         sort_field: SortField | None = None,
         sort_direction: SortDirection | None = None,
         random_seed: int | None = None,
+        user: str | LinkedUser | None = None,
     ) -> list[Genre]:
         """Get a searched, sorted and paged genre listing.
 
@@ -975,6 +1400,9 @@ class Music:
         :param sort_field: Typed sort field.
         :param sort_direction: Direction for the selected sort field.
         :param random_seed: Keep random ordering stable across pages.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
         """
         return [
             Genre.from_dict(obj)
@@ -997,7 +1425,9 @@ class Music:
                 require_schema=_listing_require_schema(
                     (TYPED_LISTING_SCHEMA_VERSION, sort_field, sort_direction),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
                 ),
+                **impersonation_arg(self.client.server_info, user),
             )
         ]
 
@@ -1067,17 +1497,375 @@ class Music:
             )
         ]
 
+    async def get_genre(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        *,
+        allow_update_metadata: bool | None = None,
+        user: str | LinkedUser | None = None,
+    ) -> Genre:
+        """
+        Get single Genre from the server.
+
+        :param allow_update_metadata: Schedule a metadata refresh on access.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return Genre.from_dict(
+            await self.client.send_command(
+                "music/genres/get",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                allow_update_metadata=allow_update_metadata,
+                require_schema=101,
+                **impersonation_arg(self.client.server_info, user),
+            ),
+        )
+
+    async def get_genre_by_external_id(
+        self, external_id: str, external_id_type: ExternalID | None = None
+    ) -> Genre | None:
+        """Get a genre by external ID, querying the library then the active providers."""
+        if result := await self.client.send_command(
+            "music/genres/get_by_external_id",
+            external_id=external_id,
+            external_id_type=external_id_type,
+            require_schema=101,
+        ):
+            return Genre.from_dict(result)
+        return None
+
+    async def get_genre_collection(
+        self,
+        item_id: str,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        favorite: bool | None = None,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> MediaCollection[Genre]:
+        """
+        Get a genre collection and optionally search or page its items.
+
+        :param item_id: The collection ID.
+        :param search: Only include items whose name contains this text.
+        :param limit: Maximum number of items to return; omitted or 0 returns them all.
+        :param offset: Number of items to skip.
+        :param favorite: Only include the items the current user likes (True) or dislikes.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return MediaCollection[Genre].from_dict(
+            await self.client.send_command(
+                "music/genres/get_collection",
+                item_id=item_id,
+                search=search,
+                limit=limit,
+                offset=offset,
+                favorite=favorite,
+                require_schema=101,
+                **impersonation_arg(self.client.server_info, user),
+            )
+        )
+
+    async def genre_count(self, favorite_only: bool | None = None) -> int:
+        """Return the total number of genres in the library."""
+        return cast(
+            "int",
+            await self.client.send_command(
+                "music/genres/count",
+                favorite_only=favorite_only,
+                require_schema=101,
+            ),
+        )
+
+    async def add_genre(self, item: Genre, overwrite_existing: bool = False) -> Genre:
+        """Add a genre to the library and return the new (or updated) library item."""
+        return Genre.from_dict(
+            await self.client.send_command(
+                "music/genres/add",
+                item=item,
+                overwrite_existing=overwrite_existing,
+                require_schema=101,
+            )
+        )
+
+    async def update_genre(
+        self,
+        item_id: str | int,
+        update: Genre,
+        overwrite: bool | None = None,
+    ) -> Genre:
+        """Update existing library record in the library database."""
+        return Genre.from_dict(
+            await self.client.send_command(
+                "music/genres/update",
+                item_id=item_id,
+                update=update,
+                overwrite=overwrite,
+                require_schema=101,
+            )
+        )
+
+    async def remove_genre(
+        self,
+        item_id: str | int,
+        recursive: bool | None = None,
+        exclude_globally: bool | None = None,
+    ) -> None:
+        """
+        Delete genre record from the database.
+
+        :param exclude_globally: Keep the scanner from recreating the genre (server default).
+        """
+        await self.client.send_command(
+            "music/genres/remove",
+            item_id=item_id,
+            recursive=recursive,
+            exclude_globally=exclude_globally,
+            require_schema=101,
+        )
+
+    async def genre_overview(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str | None = None,
+        limit: int = 25,
+    ) -> list[RecommendationFolder]:
+        """Return overview rows for a genre (all media types)."""
+        return [
+            RecommendationFolder.from_dict(item)
+            for item in await self.client.send_command(
+                "music/genres/overview",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                limit=limit,
+                require_schema=101,
+            )
+        ]
+
+    async def add_genre_alias(self, genre_id: str | int, alias: str) -> Genre:
+        """Add an alias string to a genre."""
+        return Genre.from_dict(
+            await self.client.send_command(
+                "music/genres/add_alias",
+                genre_id=genre_id,
+                alias=alias,
+                require_schema=101,
+            )
+        )
+
+    async def remove_genre_alias(self, genre_id: str | int, alias: str) -> Genre:
+        """Remove an alias string from a genre."""
+        return Genre.from_dict(
+            await self.client.send_command(
+                "music/genres/remove_alias",
+                genre_id=genre_id,
+                alias=alias,
+                require_schema=101,
+            )
+        )
+
+    async def promote_genre_alias(self, genre_id: str | int, alias: str) -> Genre:
+        """Promote an alias to a standalone genre and return the new genre."""
+        return Genre.from_dict(
+            await self.client.send_command(
+                "music/genres/promote_alias",
+                genre_id=genre_id,
+                alias=alias,
+                require_schema=101,
+            )
+        )
+
+    async def add_genre_media_mapping(
+        self,
+        genre_id: str | int,
+        media_type: MediaType,
+        media_id: str | int,
+        alias: str | None = None,
+    ) -> None:
+        """
+        Map a (library) media item to a genre.
+
+        :param alias: The alias string that caused this mapping; the genre's name if omitted.
+        """
+        await self.client.send_command(
+            "music/genres/add_media_mapping",
+            genre_id=genre_id,
+            media_type=media_type,
+            media_id=media_id,
+            alias=alias,
+            require_schema=101,
+        )
+
+    async def remove_genre_media_mapping(
+        self, genre_id: str | int, media_type: MediaType, media_id: str | int
+    ) -> None:
+        """Remove a (library) media item mapping from a genre."""
+        await self.client.send_command(
+            "music/genres/remove_media_mapping",
+            genre_id=genre_id,
+            media_type=media_type,
+            media_id=media_id,
+            require_schema=101,
+        )
+
+    async def genres_for_media_item(
+        self, media_type: MediaType, media_id: str | int
+    ) -> list[Genre]:
+        """Return all genres mapped to a given (library) media item."""
+        return [
+            Genre.from_dict(item)
+            for item in await self.client.send_command(
+                "music/genres/genres_for_media_item",
+                media_type=media_type,
+                media_id=media_id,
+                require_schema=101,
+            )
+        ]
+
+    async def genre_exclusions_for_media_item(
+        self, media_type: MediaType, media_id: str | int
+    ) -> list[Genre]:
+        """Return all genres excluded from a given (library) media item."""
+        return [
+            Genre.from_dict(item)
+            for item in await self.client.send_command(
+                "music/genres/genre_exclusions_for_media_item",
+                media_type=media_type,
+                media_id=media_id,
+                require_schema=101,
+            )
+        ]
+
+    async def exclude_genre_from_media_item(
+        self, genre_id: str | int, media_type: MediaType, media_id: str | int
+    ) -> None:
+        """Permanently exclude a genre from being mapped to a (library) media item."""
+        await self.client.send_command(
+            "music/genres/exclude_genre_from_media_item",
+            genre_id=genre_id,
+            media_type=media_type,
+            media_id=media_id,
+            require_schema=101,
+        )
+
+    async def remove_genre_exclusion(
+        self, genre_id: str | int, media_type: MediaType, media_id: str | int
+    ) -> None:
+        """Remove a genre exclusion, allowing the scanner to re-map it on the next run."""
+        await self.client.send_command(
+            "music/genres/remove_genre_exclusion",
+            genre_id=genre_id,
+            media_type=media_type,
+            media_id=media_id,
+            require_schema=101,
+        )
+
+    async def merge_genres(self, genre_ids: list[str | int], target_genre_id: str | int) -> Genre:
+        """Merge one or more genres into a target genre."""
+        return Genre.from_dict(
+            await self.client.send_command(
+                "music/genres/merge",
+                genre_ids=genre_ids,
+                target_genre_id=target_genre_id,
+                require_schema=101,
+            )
+        )
+
+    async def genre_media_counts(self, genre_ids: list[str]) -> dict[str, dict[str, int]]:
+        """Return media item counts per media type for each requested genre (by genre id)."""
+        return cast(
+            "dict[str, dict[str, int]]",
+            await self.client.send_command(
+                "music/genres/media_counts",
+                genre_ids=genre_ids,
+                require_schema=101,
+            ),
+        )
+
+    async def genre_global_exclusions(self) -> list[dict[str, Any]]:
+        """Return all globally excluded genres."""
+        return cast(
+            "list[dict[str, Any]]",
+            await self.client.send_command("music/genres/global_exclusions", require_schema=101),
+        )
+
+    async def remove_genre_global_exclusion(self, genre_id: int) -> Genre:
+        """Lift a global genre exclusion and return the restored genre."""
+        return Genre.from_dict(
+            await self.client.send_command(
+                "music/genres/remove_global_exclusion",
+                genre_id=genre_id,
+                require_schema=101,
+            )
+        )
+
+    async def restore_default_genres(
+        self, full_restore: bool = False, content_type: str | None = None
+    ) -> list[Genre]:
+        """
+        Restore the default genres for one or every taxonomy.
+
+        :param full_restore: Delete all existing genres and recreate them from the defaults.
+        :param content_type: Restrict a non-destructive restore to "music", "podcast" or
+            "audiobook".
+        """
+        return [
+            Genre.from_dict(item)
+            for item in await self.client.send_command(
+                "music/genres/restore_defaults",
+                full_restore=full_restore,
+                content_type=content_type,
+                require_schema=101,
+            )
+        ]
+
+    async def scan_genre_mappings(self) -> dict[str, Any]:
+        """Manually trigger a genre mapping scan and return its status."""
+        return cast(
+            "dict[str, Any]",
+            await self.client.send_command("music/genres/scan_mappings", require_schema=101),
+        )
+
+    async def genre_scanner_status(self) -> dict[str, Any]:
+        """Get status of the genre mapping background scanner."""
+        return cast(
+            "dict[str, Any]",
+            await self.client.send_command("music/genres/scanner_status", require_schema=101),
+        )
+
     async def get_radio(
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        allow_update_metadata: bool | None = None,
+        user: str | LinkedUser | None = None,
     ) -> Radio:
-        """Get single Radio from the server."""
+        """
+        Get single Radio from the server.
+
+        :param allow_update_metadata: Schedule a metadata refresh on access.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return Radio.from_dict(
             await self.client.send_command(
                 "music/radios/get",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                allow_update_metadata=allow_update_metadata,
+                require_schema=_listing_require_schema(
+                    (101, allow_update_metadata),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
+                ),
+                **impersonation_arg(self.client.server_info, user),
             ),
         )
 
@@ -1141,6 +1929,8 @@ class Music:
         limit: int = 50,
         library_only: bool = False,
         user: str | LinkedUser | None = None,
+        *,
+        providers: list[str] | None = None,
     ) -> SearchResults:
         """Perform global search for media items on all providers.
 
@@ -1150,6 +1940,8 @@ class Music:
         :param user: Optionally execute the search on behalf of this user: a user_id or
             username string, or a LinkedUser reference by auth provider.
             Requires the authenticated client to have sufficient permissions.
+        :param providers: Only search these provider instance ids or domains, where "library"
+            selects the library.
         """
         return SearchResults.from_dict(
             await self.client.send_command(
@@ -1158,6 +1950,8 @@ class Music:
                 media_types=media_types,
                 limit=limit,
                 library_only=library_only,
+                providers=providers,
+                require_schema=101 if providers is not None else None,
                 **impersonation_arg(self.client.server_info, user),
             ),
         )
@@ -1210,6 +2004,9 @@ class Music:
         fully_played_only: bool = True,
         user_initiated_only: bool = False,
         played_after_timestamp: int | None = None,
+        *,
+        providers: list[str] | None = None,
+        always_include_media_types: list[MediaType] | None = None,
     ) -> list[ItemMapping]:
         """
         Return a list of the last played items.
@@ -1224,6 +2021,10 @@ class Music:
         :param user_initiated_only: If True, only return items initiated by the user.
         :param played_after_timestamp: If set, only return items played at or after this
             epoch-seconds timestamp.
+        :param providers: Only include items reachable through one of these provider
+            instance ids; an empty list returns no items.
+        :param always_include_media_types: Media types to include regardless of
+            user_initiated_only.
         """
         return [
             ItemMapping.from_dict(item)
@@ -1236,35 +2037,135 @@ class Music:
                 fully_played_only=fully_played_only,
                 user_initiated_only=user_initiated_only,
                 played_after_timestamp=played_after_timestamp,
+                providers=providers,
+                always_include_media_types=always_include_media_types,
+                require_schema=_listing_require_schema(
+                    (101, providers, always_include_media_types)
+                ),
             )
         ]
 
+    async def recently_added_tracks(self, limit: int = 10) -> list[Track]:
+        """Return a list of the last added tracks."""
+        return [
+            Track.from_dict(item)
+            for item in await self.client.send_command(
+                "music/recently_added_tracks",
+                limit=limit,
+                require_schema=101,
+            )
+        ]
+
+    async def sound_effects(self) -> list[SoundEffect]:
+        """Return all sound effect items from providers supporting them."""
+        return [
+            SoundEffect.from_dict(item)
+            for item in await self.client.send_command("music/sound_effects", require_schema=101)
+        ]
+
     async def in_progress_items(
-        self, limit: int = 10, all_users: bool = False
+        self,
+        limit: int = 10,
+        all_users: bool = False,
+        *,
+        providers: list[str] | None = None,
     ) -> list[ItemMapping]:
-        """Return a list of the Audiobooks and PodcastEpisodes that are in progress."""
+        """
+        Return a list of the Audiobooks and PodcastEpisodes that are in progress.
+
+        :param providers: Only include items reachable through one of these provider
+            instance ids; an empty list returns no items.
+        """
         return [
             ItemMapping.from_dict(item)
             for item in await self.client.send_command(
                 "music/in_progress_items",
                 limit=limit,
                 all_users=all_users,
+                providers=providers,
+                require_schema=101 if providers is not None else None,
             )
         ]
 
-    async def recommendations(self) -> list[RecommendationFolder]:
-        """Get all recommendations."""
+    async def recommendations(
+        self, *, user: str | LinkedUser | None = None
+    ) -> list[RecommendationFolder]:
+        """
+        Get all recommendations.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return [
             RecommendationFolder.from_dict(item)
-            for item in await self.client.send_command("music/recommendations")
+            for item in await self.client.send_command(
+                "music/recommendations",
+                require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+                **impersonation_arg(self.client.server_info, user),
+            )
+        ]
+
+    async def recommendation_items(
+        self,
+        provider: str,
+        item_id: str,
+        providers: list[str] | None = None,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> list[MediaItemType | ItemMapping | BrowseFolder]:
+        """
+        Get the items for a single recommendation row.
+
+        :param provider: The provider instance id owning the row.
+        :param item_id: The item_id of the row, as returned by the recommendations listing.
+        :param providers: Only include items reachable through one of these provider
+            instance ids, on rows that support a provider filter.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return [
+            BrowseFolder.from_dict(item)
+            if item.get("media_type") == MediaType.FOLDER
+            else media_from_dict(item)
+            for item in await self.client.send_command(
+                "music/recommendations/items",
+                provider=provider,
+                item_id=item_id,
+                providers=providers,
+                require_schema=101,
+                **impersonation_arg(self.client.server_info, user),
+            )
         ]
 
     async def get_item_by_uri(
         self,
         uri: str,
+        *,
+        allow_update_metadata: bool | None = None,
+        user: str | LinkedUser | None = None,
     ) -> MediaItemType | ItemMapping:
-        """Get single music item providing a mediaitem uri."""
-        return media_from_dict(await self.client.send_command("music/item_by_uri", uri=uri))
+        """
+        Get single music item providing a mediaitem uri.
+
+        :param allow_update_metadata: Schedule a metadata refresh on access.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return media_from_dict(
+            await self.client.send_command(
+                "music/item_by_uri",
+                uri=uri,
+                allow_update_metadata=allow_update_metadata,
+                require_schema=_listing_require_schema(
+                    (101, allow_update_metadata),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
+                ),
+                **impersonation_arg(self.client.server_info, user),
+            )
+        )
 
     async def verify_item_uri(
         self,
@@ -1295,14 +2196,30 @@ class Music:
         media_type: MediaType,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        allow_update_metadata: bool | None = None,
+        user: str | LinkedUser | None = None,
     ) -> MediaItemType | ItemMapping:
-        """Get single music item by id and media type."""
+        """
+        Get single music item by id and media type.
+
+        :param allow_update_metadata: Schedule a metadata refresh on access.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return media_from_dict(
             await self.client.send_command(
                 "music/item",
                 media_type=media_type,
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                allow_update_metadata=allow_update_metadata,
+                require_schema=_listing_require_schema(
+                    (101, allow_update_metadata),
+                    (IMPERSONATION_SCHEMA_VERSION, user),
+                ),
+                **impersonation_arg(self.client.server_info, user),
             )
         )
 
@@ -1311,13 +2228,23 @@ class Music:
         media_type: MediaType,
         item_id: str,
         provider_instance_id_or_domain: str,
+        *,
+        user: str | LinkedUser | None = None,
     ) -> MediaItemType | None:
-        """Get single library music item by id and media type."""
+        """
+        Get single library music item by id and media type.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         if result := await self.client.send_command(
             "music/get_library_item",
             media_type=media_type,
             item_id=item_id,
             provider_instance_id_or_domain=provider_instance_id_or_domain,
+            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
         ):
             return cast("MediaItemType", media_from_dict(result))
         return None
@@ -1339,6 +2266,24 @@ class Music:
             "music/favorites/remove_item",
             media_type=media_type,
             library_item_id=library_item_id,
+        )
+
+    async def set_item_favorite(
+        self,
+        item: str | MediaItemType | ItemMapping,
+        favorite: bool | None,
+    ) -> None:
+        """
+        Set the calling user's like, dislike or unset on a media item.
+
+        :param item: The item (uri or media item) to set the state on.
+        :param favorite: True to like, False to dislike, None to clear the state.
+        """
+        await self.client.send_command(
+            "music/favorites/set_item",
+            item=item,
+            favorite=favorite,
+            require_schema=101,
         )
 
     async def remove_item_from_library(
@@ -1376,11 +2321,47 @@ class Music:
             return media_from_dict(result)
         return None
 
+    async def add_provider_mapping(
+        self, media_type: MediaType, db_id: str, mapping: ProviderMapping
+    ) -> None:
+        """Add provider mapping to the given library item."""
+        await self.client.send_command(
+            "music/add_provider_mapping",
+            media_type=media_type,
+            db_id=db_id,
+            mapping=mapping,
+            require_schema=101,
+        )
+
+    async def remove_provider_mapping(
+        self, media_type: MediaType, db_id: str, mapping: ProviderMapping
+    ) -> None:
+        """Remove provider mapping from the given library item."""
+        await self.client.send_command(
+            "music/remove_provider_mapping",
+            media_type=media_type,
+            db_id=db_id,
+            mapping=mapping,
+            require_schema=101,
+        )
+
+    async def match_providers(self, media_type: MediaType, db_id: str) -> None:
+        """Search for mappings on all providers for the given library item."""
+        await self.client.send_command(
+            "music/match_providers",
+            media_type=media_type,
+            db_id=db_id,
+            require_schema=101,
+        )
+
     async def mark_item_played(
         self,
         media_item: MediaItemType,
         fully_played: bool = True,
         userid: str | None = None,
+        *,
+        seconds_played: int | None = None,
+        playback_speed: float | None = None,
     ) -> None:
         """
         Mark item as played in playlog.
@@ -1390,12 +2371,17 @@ class Music:
         :param userid: Optionally attribute this play to a specific user (instead of the user
             the client is authenticated as). Requires the authenticated client to have
             sufficient permissions.
+        :param seconds_played: The number of seconds played (the resume position).
+        :param playback_speed: The playback speed to store (audiobooks/podcasts).
         """
         await self.client.send_command(
             "music/mark_played",
             media_item=media_item,
             fully_played=fully_played,
             userid=userid,
+            seconds_played=seconds_played,
+            playback_speed=playback_speed,
+            require_schema=_listing_require_schema((101, seconds_played, playback_speed)),
         )
 
     async def mark_item_unplayed(
@@ -1687,18 +2673,73 @@ class Music:
             )
         )
 
+    async def get_album_by_external_id(
+        self, external_id: str, external_id_type: ExternalID | None = None
+    ) -> Album | None:
+        """Get an album by external ID, querying the library then the active providers."""
+        if result := await self.client.send_command(
+            "music/albums/get_by_external_id",
+            external_id=external_id,
+            external_id_type=external_id_type,
+            require_schema=101,
+        ):
+            return Album.from_dict(result)
+        return None
+
+    async def get_album_collection(
+        self,
+        item_id: str,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        favorite: bool | None = None,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> MediaCollection[Album]:
+        """
+        Get an album collection and optionally search or page its items.
+
+        :param item_id: The collection ID.
+        :param search: Only include items whose name contains this text.
+        :param limit: Maximum number of items to return; omitted or 0 returns them all.
+        :param offset: Number of items to skip.
+        :param favorite: Only include the items the current user likes (True) or dislikes.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return MediaCollection[Album].from_dict(
+            await self.client.send_command(
+                "music/albums/get_collection",
+                item_id=item_id,
+                search=search,
+                limit=limit,
+                offset=offset,
+                favorite=favorite,
+                require_schema=101,
+                **impersonation_arg(self.client.server_info, user),
+            )
+        )
+
     async def artist_count(
         self,
         favorite_only: bool | None = None,
         album_artists_only: bool | None = None,
+        artist_type: ArtistType | None = None,
     ) -> int:
-        """Return the total number of items in the library."""
+        """
+        Return the total number of items in the library.
+
+        :param artist_type: Only count artists of this type.
+        """
         return cast(
             "int",
             await self.client.send_command(
                 "music/artists/count",
                 favorite_only=favorite_only,
                 album_artists_only=album_artists_only,
+                artist_type=artist_type,
+                require_schema=101 if artist_type is not None else None,
             ),
         )
 
@@ -1725,6 +2766,361 @@ class Music:
                 overwrite=overwrite,
             )
         )
+
+    async def get_artist_by_external_id(
+        self, external_id: str, external_id_type: ExternalID | None = None
+    ) -> Artist | None:
+        """Get an artist by external ID, querying the library then the active providers."""
+        if result := await self.client.send_command(
+            "music/artists/get_by_external_id",
+            external_id=external_id,
+            external_id_type=external_id_type,
+            require_schema=101,
+        ):
+            return Artist.from_dict(result)
+        return None
+
+    async def get_artist_collection(
+        self,
+        item_id: str,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        favorite: bool | None = None,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> MediaCollection[Artist]:
+        """
+        Get an artist collection and optionally search or page its items.
+
+        :param item_id: The collection ID.
+        :param search: Only include items whose name contains this text.
+        :param limit: Maximum number of items to return; omitted or 0 returns them all.
+        :param offset: Number of items to skip.
+        :param favorite: Only include the items the current user likes (True) or dislikes.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return MediaCollection[Artist].from_dict(
+            await self.client.send_command(
+                "music/artists/get_collection",
+                item_id=item_id,
+                search=search,
+                limit=limit,
+                offset=offset,
+                favorite=favorite,
+                require_schema=101,
+                **impersonation_arg(self.client.server_info, user),
+            )
+        )
+
+    async def artist_tracks_count(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        *,
+        provider_filter: str | None = None,
+        search: str | None = None,
+        favorite: bool | None = None,
+    ) -> int:
+        """Return the number of tracks in an artist listing."""
+        return cast(
+            "int",
+            await self.client.send_command(
+                "music/artists/artist_tracks_count",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                provider_filter=provider_filter,
+                search=search,
+                favorite=favorite,
+                require_schema=101,
+            ),
+        )
+
+    async def artist_albums_count(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        *,
+        provider_filter: str | None = None,
+        search: str | None = None,
+        album_types: list[AlbumType] | None = None,
+        favorite: bool | None = None,
+    ) -> int:
+        """Return the number of albums in an artist listing."""
+        return cast(
+            "int",
+            await self.client.send_command(
+                "music/artists/artist_albums_count",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                provider_filter=provider_filter,
+                search=search,
+                album_types=album_types,
+                favorite=favorite,
+                require_schema=101,
+            ),
+        )
+
+    async def artist_appears_on(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        *,
+        provider_filter: str | None = None,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
+    ) -> list[Album]:
+        """Return the albums an artist appears on without being an album artist."""
+        return [
+            Album.from_dict(item)
+            for item in await self.client.send_command(
+                "music/artists/artist_appears_on",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                provider_filter=provider_filter,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=101,
+            )
+        ]
+
+    async def artist_appears_on_count(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        *,
+        provider_filter: str | None = None,
+        search: str | None = None,
+    ) -> int:
+        """Return the number of albums an artist appears on without being an album artist."""
+        return cast(
+            "int",
+            await self.client.send_command(
+                "music/artists/artist_appears_on_count",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                provider_filter=provider_filter,
+                search=search,
+                require_schema=101,
+            ),
+        )
+
+    async def artist_audiobooks(  # noqa: PLR0913
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        artist_type: ArtistType | None = None,
+        in_library_only: bool = False,
+        *,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        provider_filter: str | None = None,
+        collapse_collections: bool = False,
+        random_seed: int | None = None,
+    ) -> list[Audiobook | MediaCollection[Audiobook]]:
+        """
+        Return the audiobooks of an artist, searched, sorted and paged.
+
+        :param artist_type: Whether the artist is listed as the author (default) or the
+            narrator; can be omitted for library artists.
+        :param in_library_only: Only list the audiobooks that are in the library.
+        :param provider_filter: Only list audiobooks from this provider instance.
+        :param collapse_collections: Return a collection instead of its in-library audiobooks.
+        """
+        return [
+            MediaCollection[Audiobook].from_dict(item)
+            if item.get("media_type") == MediaType.COLLECTION
+            else Audiobook.from_dict(item)
+            for item in await self.client.send_command(
+                "music/artists/artist_audiobooks",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                artist_type=artist_type,
+                in_library_only=in_library_only,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                provider_filter=provider_filter,
+                collapse_collections=collapse_collections,
+                random_seed=random_seed,
+                require_schema=101,
+            )
+        ]
+
+    async def discography(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        *,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        album_types: list[AlbumType] | None = None,
+        random_seed: int | None = None,
+    ) -> list[Album]:
+        """
+        Return a library artist's discography as MusicBrainz knows it, searched, sorted and paged.
+
+        :param provider_instance_id_or_domain: The provider of the artist, must be "library".
+        :param album_types: Only list the releases MusicBrainz gives one of these types.
+        """
+        return [
+            Album.from_dict(item)
+            for item in await self.client.send_command(
+                "music/artists/discography",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                album_types=album_types,
+                random_seed=random_seed,
+                require_schema=101,
+            )
+        ]
+
+    async def discography_count(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        *,
+        search: str | None = None,
+        album_types: list[AlbumType] | None = None,
+    ) -> int:
+        """Return the number of releases in a library artist's discography."""
+        return cast(
+            "int",
+            await self.client.send_command(
+                "music/artists/discography_count",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                search=search,
+                album_types=album_types,
+                require_schema=101,
+            ),
+        )
+
+    async def top_tracks(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        *,
+        provider_filter: str | None = None,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
+    ) -> list[Track]:
+        """Return the top/featured tracks of an artist, searched, sorted and paged."""
+        return [
+            Track.from_dict(item)
+            for item in await self.client.send_command(
+                "music/artists/top_tracks",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                provider_filter=provider_filter,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=101,
+            )
+        ]
+
+    async def top_albums(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        *,
+        provider_filter: str | None = None,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
+    ) -> list[Album]:
+        """Return the top/featured albums of an artist, searched, sorted and paged."""
+        return [
+            Album.from_dict(item)
+            for item in await self.client.send_command(
+                "music/artists/top_albums",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                provider_filter=provider_filter,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                limit=limit,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=101,
+            )
+        ]
+
+    async def similar_artists(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        *,
+        provider_filter: str | None = None,
+        limit: int | None = None,
+        search: str | None = None,
+        sort_field: SortField | None = None,
+        sort_direction: SortDirection | None = None,
+        offset: int | None = None,
+        random_seed: int | None = None,
+    ) -> list[Artist]:
+        """Return the artists similar to an artist, searched, sorted and paged."""
+        return [
+            Artist.from_dict(item)
+            for item in await self.client.send_command(
+                "music/artists/similar_artists",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                provider_filter=provider_filter,
+                limit=limit,
+                search=search,
+                sort_field=sort_field,
+                sort_direction=sort_direction,
+                offset=offset,
+                random_seed=random_seed,
+                require_schema=101,
+            )
+        ]
+
+    async def library_artist_types(self) -> list[ArtistType]:
+        """Get all supported in-library artist types."""
+        return [
+            ArtistType(item)
+            for item in await self.client.send_command(
+                "music/artists/library_artist_types",
+                require_schema=101,
+            )
+        ]
 
     async def audiobook_versions(
         self,
@@ -1799,6 +3195,54 @@ class Music:
             )
         )
 
+    async def get_audiobook_by_external_id(
+        self, external_id: str, external_id_type: ExternalID | None = None
+    ) -> Audiobook | None:
+        """Get an audiobook by external ID, querying the library then the active providers."""
+        if result := await self.client.send_command(
+            "music/audiobooks/get_by_external_id",
+            external_id=external_id,
+            external_id_type=external_id_type,
+            require_schema=101,
+        ):
+            return Audiobook.from_dict(result)
+        return None
+
+    async def get_audiobook_collection(
+        self,
+        item_id: str,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        favorite: bool | None = None,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> MediaCollection[Audiobook]:
+        """
+        Get an audiobook collection and optionally search or page its items.
+
+        :param item_id: The collection ID.
+        :param search: Only include items whose name contains this text.
+        :param limit: Maximum number of items to return; omitted or 0 returns them all.
+        :param offset: Number of items to skip.
+        :param favorite: Only include the items the current user likes (True) or dislikes.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return MediaCollection[Audiobook].from_dict(
+            await self.client.send_command(
+                "music/audiobooks/get_collection",
+                item_id=item_id,
+                search=search,
+                limit=limit,
+                offset=offset,
+                favorite=favorite,
+                require_schema=101,
+                **impersonation_arg(self.client.server_info, user),
+            )
+        )
+
     async def playlist_count(self, favorite_only: bool | None = None) -> int:
         """Return the total number of items in the library."""
         return cast(
@@ -1822,14 +3266,72 @@ class Music:
         item_id: str | int,
         update: Playlist,
         overwrite: bool | None = None,
+        *,
+        user: str | LinkedUser | None = None,
     ) -> Playlist:
-        """Update existing library record in the library database."""
+        """
+        Update existing library record in the library database.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
         return Playlist.from_dict(
             await self.client.send_command(
                 "music/playlists/update",
                 item_id=item_id,
                 update=update,
                 overwrite=overwrite,
+                require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+                **impersonation_arg(self.client.server_info, user),
+            )
+        )
+
+    async def get_playlist_by_external_id(
+        self, external_id: str, external_id_type: ExternalID | None = None
+    ) -> Playlist | None:
+        """Get a playlist by external ID, querying the library then the active providers."""
+        if result := await self.client.send_command(
+            "music/playlists/get_by_external_id",
+            external_id=external_id,
+            external_id_type=external_id_type,
+            require_schema=101,
+        ):
+            return Playlist.from_dict(result)
+        return None
+
+    async def get_playlist_collection(
+        self,
+        item_id: str,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        favorite: bool | None = None,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> MediaCollection[Playlist]:
+        """
+        Get a playlist collection and optionally search or page its items.
+
+        :param item_id: The collection ID.
+        :param search: Only include items whose name contains this text.
+        :param limit: Maximum number of items to return; omitted or 0 returns them all.
+        :param offset: Number of items to skip.
+        :param favorite: Only include the items the current user likes (True) or dislikes.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return MediaCollection[Playlist].from_dict(
+            await self.client.send_command(
+                "music/playlists/get_collection",
+                item_id=item_id,
+                search=search,
+                limit=limit,
+                offset=offset,
+                favorite=favorite,
+                require_schema=101,
+                **impersonation_arg(self.client.server_info, user),
             )
         )
 
@@ -1847,16 +3349,51 @@ class Music:
         self,
         item_id: str,
         provider_instance_id_or_domain: str,
-    ) -> list[PodcastEpisode]:
-        """Return single podcast episode by the given provider podcast id."""
-        return [
-            PodcastEpisode.from_dict(obj)
-            for obj in await self.client.send_command(
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> PodcastEpisode:
+        """
+        Return single podcast episode by the given provider podcast id.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return PodcastEpisode.from_dict(
+            await self.client.send_command(
                 "music/podcasts/podcast_episode",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
+                require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+                **impersonation_arg(self.client.server_info, user),
             )
-        ]
+        )
+
+    async def podcast_episode_transcript(
+        self,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+    ) -> PodcastEpisodeTranscript:
+        """
+        Return a podcast episode's transcript as readable text and timed cues.
+
+        Both are None when no transcript is available for the episode.
+
+        :param item_id: The provider episode id.
+        :param provider_instance_id_or_domain: Provider the episode belongs to.
+        """
+        text, cues = await self.client.send_command(
+            "music/podcasts/podcast_episode_transcript",
+            item_id=item_id,
+            provider_instance_id_or_domain=provider_instance_id_or_domain,
+            require_schema=101,
+        )
+        return PodcastEpisodeTranscript(
+            text=text,
+            cues=[MediaItemTranscriptCue.from_dict(cue) for cue in cues]
+            if cues is not None
+            else None,
+        )
 
     async def podcast_versions(
         self,
@@ -1921,6 +3458,54 @@ class Music:
             )
         )
 
+    async def get_podcast_by_external_id(
+        self, external_id: str, external_id_type: ExternalID | None = None
+    ) -> Podcast | None:
+        """Get a podcast by external ID, querying the library then the active providers."""
+        if result := await self.client.send_command(
+            "music/podcasts/get_by_external_id",
+            external_id=external_id,
+            external_id_type=external_id_type,
+            require_schema=101,
+        ):
+            return Podcast.from_dict(result)
+        return None
+
+    async def get_podcast_collection(
+        self,
+        item_id: str,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        favorite: bool | None = None,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> MediaCollection[Podcast]:
+        """
+        Get a podcast collection and optionally search or page its items.
+
+        :param item_id: The collection ID.
+        :param search: Only include items whose name contains this text.
+        :param limit: Maximum number of items to return; omitted or 0 returns them all.
+        :param offset: Number of items to skip.
+        :param favorite: Only include the items the current user likes (True) or dislikes.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return MediaCollection[Podcast].from_dict(
+            await self.client.send_command(
+                "music/podcasts/get_collection",
+                item_id=item_id,
+                search=search,
+                limit=limit,
+                offset=offset,
+                favorite=favorite,
+                require_schema=101,
+                **impersonation_arg(self.client.server_info, user),
+            )
+        )
+
     async def radio_count(self, favorite_only: bool | None = None) -> int:
         """Return the total number of items in the library."""
         return cast(
@@ -1952,6 +3537,83 @@ class Music:
                 item_id=item_id,
                 update=update,
                 overwrite=overwrite,
+            )
+        )
+
+    async def get_radio_by_external_id(
+        self, external_id: str, external_id_type: ExternalID | None = None
+    ) -> Radio | None:
+        """Get a radio by external ID, querying the library then the active providers."""
+        if result := await self.client.send_command(
+            "music/radios/get_by_external_id",
+            external_id=external_id,
+            external_id_type=external_id_type,
+            require_schema=101,
+        ):
+            return Radio.from_dict(result)
+        return None
+
+    async def get_radio_collection(
+        self,
+        item_id: str,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        favorite: bool | None = None,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> MediaCollection[Radio]:
+        """
+        Get a radio collection and optionally search or page its items.
+
+        :param item_id: The collection ID.
+        :param search: Only include items whose name contains this text.
+        :param limit: Maximum number of items to return; omitted or 0 returns them all.
+        :param offset: Number of items to skip.
+        :param favorite: Only include the items the current user likes (True) or dislikes.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return MediaCollection[Radio].from_dict(
+            await self.client.send_command(
+                "music/radios/get_collection",
+                item_id=item_id,
+                search=search,
+                limit=limit,
+                offset=offset,
+                favorite=favorite,
+                require_schema=101,
+                **impersonation_arg(self.client.server_info, user),
+            )
+        )
+
+    async def radio_tracks(self, item_id: str, provider_instance_id_or_domain: str) -> list[Track]:
+        """Return the preview/listing for a tracklisted radio station, dynamic or finite."""
+        return [
+            Track.from_dict(item)
+            for item in await self.client.send_command(
+                "music/radios/radio_tracks",
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                require_schema=101,
+            )
+        ]
+
+    async def export_radios(self) -> str:
+        """Export all library radio stations to M3U8 format."""
+        return cast(
+            "str",
+            await self.client.send_command("music/radios/export_radios", require_schema=101),
+        )
+
+    async def import_radios(self, m3u_data: str) -> BackgroundTask:
+        """Queue importing radio stations from M3U8 format."""
+        return BackgroundTask.from_dict(
+            await self.client.send_command(
+                "music/radios/import_radios",
+                m3u_data=m3u_data,
+                require_schema=101,
             )
         )
 
@@ -2033,5 +3695,53 @@ class Music:
                 item_id=item_id,
                 update=update,
                 overwrite=overwrite,
+            )
+        )
+
+    async def get_track_by_external_id(
+        self, external_id: str, external_id_type: ExternalID | None = None
+    ) -> Track | None:
+        """Get a track by external ID, querying the library then the active providers."""
+        if result := await self.client.send_command(
+            "music/tracks/get_by_external_id",
+            external_id=external_id,
+            external_id_type=external_id_type,
+            require_schema=101,
+        ):
+            return Track.from_dict(result)
+        return None
+
+    async def get_track_collection(
+        self,
+        item_id: str,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+        favorite: bool | None = None,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> MediaCollection[Track]:
+        """
+        Get a track collection and optionally search or page its items.
+
+        :param item_id: The collection ID.
+        :param search: Only include items whose name contains this text.
+        :param limit: Maximum number of items to return; omitted or 0 returns them all.
+        :param offset: Number of items to skip.
+        :param favorite: Only include the items the current user likes (True) or dislikes.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        return MediaCollection[Track].from_dict(
+            await self.client.send_command(
+                "music/tracks/get_collection",
+                item_id=item_id,
+                search=search,
+                limit=limit,
+                offset=offset,
+                favorite=favorite,
+                require_schema=101,
+                **impersonation_arg(self.client.server_info, user),
             )
         )
