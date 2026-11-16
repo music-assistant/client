@@ -33,6 +33,9 @@ LISTING_FILTER_SCHEMA_VERSION: Final[int] = 96
 # Minimum server schema for stable seeded random ordering across pages.
 RANDOM_SEED_SCHEMA_VERSION: Final[int] = 98
 
+# Minimum server schema for the statistics API with complete plays_over_time results.
+STATISTICS_SCHEMA_VERSION: Final[int] = 100
+
 # Minimum server schema for running item reads, playlist edits and queue commands as a user.
 IMPERSONATION_SCHEMA_VERSION: Final[int] = 101
 

@@ -128,6 +128,7 @@ The client provides several controllers for interacting with different aspects o
 - **`client.players`** - Player control and information
 - **`client.player_queues`** - Queue management for players
 - **`client.config`** - Server configuration management
+- **`client.statistics`** - Listening statistics of the current user (play history, top items, plays over time, etc.)
 
 ## Example Usage
 
