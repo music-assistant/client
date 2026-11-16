@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 import orjson
 from music_assistant_models.auth import AuthProviderType
 
+from .constants import IMPERSONATION_SCHEMA_VERSION
 from .exceptions import InvalidServerVersion
 
 if TYPE_CHECKING:
@@ -69,6 +70,29 @@ def impersonation_arg(
         return {"user": plain_user}
     # older servers only accept the username argument on selected commands
     return {"username": plain_user}
+
+
+def acting_user(
+    server_info: ServerInfoMessage | None,
+    user: str | LinkedUser | None,
+) -> str | LinkedUser | None:
+    """
+    Return the user to send on a command that accepts one since IMPERSONATION_SCHEMA_VERSION.
+
+    An older server runs the command without a soft LinkedUser (required False), as it would
+    for an unknown user; a username or a required LinkedUser is kept, so it still fails there.
+
+    :param server_info: The connected server's info (to determine the schema version).
+    :param user: The user to impersonate (or None).
+    """
+    schema_version = server_info.schema_version if server_info is not None else 0
+    if (
+        isinstance(user, dict)
+        and not user.get("required", True)
+        and schema_version < IMPERSONATION_SCHEMA_VERSION
+    ):
+        return None
+    return user
 
 
 def compact_media_item_dict(item: dict[str, Any]) -> dict[str, Any]:

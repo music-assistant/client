@@ -17,7 +17,7 @@ from music_assistant_models.player_queue import PlayerQueue
 from music_assistant_models.queue_item import QueueItem
 
 from .constants import IMPERSONATION_SCHEMA_VERSION, PLAY_MEDIA_SORT_SCHEMA_VERSION
-from .helpers import LinkedUser, impersonation_arg
+from .helpers import LinkedUser, acting_user, impersonation_arg
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -86,6 +86,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return [
             QueueItem.from_dict(obj)
             for obj in await self.client.send_command(
@@ -108,6 +109,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         assert self.client.server_info  # for type checking
         # from schema version 27+, the server can handle this natively; another user's queue
         # only ever comes from the server, never from this connection's cache
@@ -132,6 +134,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/play",
             queue_id=queue_id,
@@ -147,6 +150,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/pause",
             queue_id=queue_id,
@@ -162,6 +166,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/stop",
             queue_id=queue_id,
@@ -183,6 +188,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/resume",
             queue_id=queue_id,
@@ -199,6 +205,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/next",
             queue_id=queue_id,
@@ -214,6 +221,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/previous",
             queue_id=queue_id,
@@ -229,6 +237,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/clear",
             queue_id=queue_id,
@@ -259,6 +268,7 @@ class PlayerQueues:
 
         NOTE: Fails if the given QueueItem is already playing or loaded in the buffer.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/move_item",
             queue_id=queue_id,
@@ -314,6 +324,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/delete_item",
             queue_id=queue_id,
@@ -334,6 +345,7 @@ class PlayerQueues:
           LinkedUser reference by auth provider. Requires the users.impersonate scope when
           it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/seek",
             queue_id=queue_id,
@@ -354,6 +366,7 @@ class PlayerQueues:
           LinkedUser reference by auth provider. Requires the users.impersonate scope when
           it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/skip",
             queue_id=queue_id,
@@ -372,6 +385,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/shuffle",
             queue_id=queue_id,
@@ -390,6 +404,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/repeat",
             queue_id=queue_id,
@@ -490,6 +505,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/play_index",
             queue_id=queue_id,
@@ -638,6 +654,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         await self.client.send_command(
             "player_queues/play_pause",
             queue_id=queue_id,

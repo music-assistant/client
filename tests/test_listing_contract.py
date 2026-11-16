@@ -30,6 +30,7 @@ from music_assistant_models.setup_flow import FlowStepType, SetupFlowStep
 from music_assistant_client.client import MusicAssistantClient
 from music_assistant_client.config import Config
 from music_assistant_client.exceptions import InvalidServerVersion
+from music_assistant_client.helpers import LinkedUser
 from music_assistant_client.music import Music, PodcastEpisodeTranscript, _listing_require_schema
 from music_assistant_client.player_queues import PlayerQueues
 
@@ -117,6 +118,27 @@ async def test_nonlibrary_discovery_rejects_older_servers_before_sending(
     client, send_message = older_server_client
     with pytest.raises(InvalidServerVersion):
         await client.music.get_sort_options(ListingType.ALBUM_TRACKS)
+    send_message.assert_not_awaited()
+
+
+async def test_soft_user_is_dropped_on_older_servers(
+    send_command: AsyncMock, queues: PlayerQueues
+) -> None:
+    """A soft linked user runs the command as the connected account on an older server."""
+    soft_user = LinkedUser(provider="homeassistant", user_id="ha_user_1", required=False)
+    await queues.get_queue_items("player_1", limit=5, user=soft_user)
+    send_command.assert_awaited_once_with(
+        "player_queues/items", queue_id="player_1", limit=5, offset=0, require_schema=None
+    )
+
+
+async def test_username_is_rejected_on_older_servers(
+    older_server_client: tuple[MusicAssistantClient, AsyncMock],
+) -> None:
+    """An explicit username still fails before sending to an older server."""
+    client, send_message = older_server_client
+    with pytest.raises(InvalidServerVersion):
+        await client.player_queues.get_queue_items("player_1", limit=5, user="john")
     send_message.assert_not_awaited()
 
 

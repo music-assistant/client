@@ -56,7 +56,7 @@ from .constants import (
     TYPED_LISTING_SCHEMA_VERSION,
     VERSIONS_BROWSE_LISTING_SCHEMA_VERSION,
 )
-from .helpers import LinkedUser, impersonation_arg
+from .helpers import LinkedUser, acting_user, impersonation_arg
 
 if TYPE_CHECKING:
     from music_assistant_models.queue_item import QueueItem
@@ -201,6 +201,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return Track.from_dict(
             await self.client.send_command(
                 "music/tracks/get",
@@ -388,6 +389,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return Album.from_dict(
             await self.client.send_command(
                 "music/albums/get",
@@ -425,6 +427,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return [
             Track.from_dict(item)
             for item in await self.client.send_command(
@@ -577,6 +580,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return Artist.from_dict(
             await self.client.send_command(
                 "music/artists/get",
@@ -615,6 +619,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         del in_library_only
         return [
             Track.from_dict(item)
@@ -673,6 +678,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         del in_library_only
         return [
             Album.from_dict(item)
@@ -783,6 +789,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return Playlist.from_dict(
             await self.client.send_command(
                 "music/playlists/get",
@@ -822,6 +829,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return [
             cast("Track | Radio | PodcastEpisode | Audiobook | SoundEffect", media_from_dict(obj))
             for obj in await self.client.send_command(
@@ -871,6 +879,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         if result := await self.client.send_command(
             "music/playlists/add_playlist_tracks",
             db_playlist_id=db_playlist_id,
@@ -897,6 +906,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         if result := await self.client.send_command(
             "music/playlists/remove_playlist_tracks",
             db_playlist_id=db_playlist_id,
@@ -925,6 +935,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return Playlist.from_dict(
             await self.client.send_command(
                 "music/playlists/create_playlist",
@@ -1146,6 +1157,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return Audiobook.from_dict(
             await self.client.send_command(
                 "music/audiobooks/get",
@@ -1236,6 +1248,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return Podcast.from_dict(
             await self.client.send_command(
                 "music/podcasts/get",
@@ -1272,6 +1285,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return [
             PodcastEpisode.from_dict(obj)
             for obj in await self.client.send_command(
@@ -1404,6 +1418,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return [
             Genre.from_dict(obj)
             for obj in await self.client.send_command(
@@ -1855,6 +1870,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return Radio.from_dict(
             await self.client.send_command(
                 "music/radios/get",
@@ -2097,6 +2113,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return [
             RecommendationFolder.from_dict(item)
             for item in await self.client.send_command(
@@ -2154,6 +2171,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return media_from_dict(
             await self.client.send_command(
                 "music/item_by_uri",
@@ -2208,6 +2226,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return media_from_dict(
             await self.client.send_command(
                 "music/item",
@@ -2238,6 +2257,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         if result := await self.client.send_command(
             "music/get_library_item",
             media_type=media_type,
@@ -3276,6 +3296,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return Playlist.from_dict(
             await self.client.send_command(
                 "music/playlists/update",
@@ -3359,6 +3380,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user)
         return PodcastEpisode.from_dict(
             await self.client.send_command(
                 "music/podcasts/podcast_episode",
