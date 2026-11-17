@@ -48,7 +48,6 @@ from .constants import (
     ALBUM_TRACKS_LISTING_SCHEMA_VERSION,
     ARTIST_LISTING_SCHEMA_VERSION,
     ARTIST_PROVIDER_FILTER_SCHEMA_VERSION,
-    IMPERSONATION_SCHEMA_VERSION,
     LIBRARY_USER_SCHEMA_VERSION,
     LISTING_FILTER_SCHEMA_VERSION,
     PLAYLIST_PODCAST_LISTING_SCHEMA_VERSION,
@@ -201,7 +200,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return Track.from_dict(
             await self.client.send_command(
                 "music/tracks/get",
@@ -212,7 +211,7 @@ class Music:
                 recursive=recursive,
                 require_schema=_listing_require_schema(
                     (101, allow_update_metadata, recursive),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             ),
@@ -389,7 +388,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return Album.from_dict(
             await self.client.send_command(
                 "music/albums/get",
@@ -399,7 +398,7 @@ class Music:
                 recursive=recursive,
                 require_schema=_listing_require_schema(
                     (101, allow_update_metadata, recursive),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             ),
@@ -427,7 +426,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return [
             Track.from_dict(item)
             for item in await self.client.send_command(
@@ -453,7 +452,7 @@ class Music:
                     ),
                     (LISTING_FILTER_SCHEMA_VERSION, favorite),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             )
@@ -580,7 +579,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return Artist.from_dict(
             await self.client.send_command(
                 "music/artists/get",
@@ -589,7 +588,7 @@ class Music:
                 allow_update_metadata=allow_update_metadata,
                 require_schema=_listing_require_schema(
                     (101, allow_update_metadata),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             ),
@@ -619,7 +618,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         del in_library_only
         return [
             Track.from_dict(item)
@@ -647,7 +646,7 @@ class Music:
                     (LISTING_FILTER_SCHEMA_VERSION, favorite),
                     (ARTIST_PROVIDER_FILTER_SCHEMA_VERSION, provider_filter),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             )
@@ -678,7 +677,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         del in_library_only
         return [
             Album.from_dict(item)
@@ -707,7 +706,7 @@ class Music:
                     (LISTING_FILTER_SCHEMA_VERSION, album_types, favorite),
                     (ARTIST_PROVIDER_FILTER_SCHEMA_VERSION, provider_filter),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             )
@@ -789,7 +788,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return Playlist.from_dict(
             await self.client.send_command(
                 "music/playlists/get",
@@ -798,7 +797,7 @@ class Music:
                 allow_update_metadata=allow_update_metadata,
                 require_schema=_listing_require_schema(
                     (101, allow_update_metadata),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             ),
@@ -829,7 +828,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return [
             cast("Track | Radio | PodcastEpisode | Audiobook | SoundEffect", media_from_dict(obj))
             for obj in await self.client.send_command(
@@ -857,7 +856,7 @@ class Music:
                         offset,
                     ),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             )
@@ -879,12 +878,12 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         if result := await self.client.send_command(
             "music/playlists/add_playlist_tracks",
             db_playlist_id=db_playlist_id,
             uris=uris,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         ):
             return BackgroundTask.from_dict(result)
@@ -906,12 +905,12 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         if result := await self.client.send_command(
             "music/playlists/remove_playlist_tracks",
             db_playlist_id=db_playlist_id,
             positions_to_remove=positions_to_remove,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         ):
             return BackgroundTask.from_dict(result)
@@ -935,7 +934,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return Playlist.from_dict(
             await self.client.send_command(
                 "music/playlists/create_playlist",
@@ -945,7 +944,7 @@ class Music:
                 strict_provider_instance=strict_provider_instance,
                 require_schema=_listing_require_schema(
                     (101, media_types, strict_provider_instance),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             )
@@ -1157,7 +1156,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return Audiobook.from_dict(
             await self.client.send_command(
                 "music/audiobooks/get",
@@ -1166,7 +1165,7 @@ class Music:
                 allow_update_metadata=allow_update_metadata,
                 require_schema=_listing_require_schema(
                     (101, allow_update_metadata),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             ),
@@ -1248,7 +1247,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return Podcast.from_dict(
             await self.client.send_command(
                 "music/podcasts/get",
@@ -1257,7 +1256,7 @@ class Music:
                 allow_update_metadata=allow_update_metadata,
                 require_schema=_listing_require_schema(
                     (101, allow_update_metadata),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             ),
@@ -1285,7 +1284,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return [
             PodcastEpisode.from_dict(obj)
             for obj in await self.client.send_command(
@@ -1312,7 +1311,7 @@ class Music:
                     ),
                     (LISTING_FILTER_SCHEMA_VERSION, exclude_item_id),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             )
@@ -1418,7 +1417,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return [
             Genre.from_dict(obj)
             for obj in await self.client.send_command(
@@ -1440,7 +1439,7 @@ class Music:
                 require_schema=_listing_require_schema(
                     (TYPED_LISTING_SCHEMA_VERSION, sort_field, sort_direction),
                     (RANDOM_SEED_SCHEMA_VERSION, random_seed),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             )
@@ -1870,7 +1869,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return Radio.from_dict(
             await self.client.send_command(
                 "music/radios/get",
@@ -1879,7 +1878,7 @@ class Music:
                 allow_update_metadata=allow_update_metadata,
                 require_schema=_listing_require_schema(
                     (101, allow_update_metadata),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             ),
@@ -2113,12 +2112,12 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return [
             RecommendationFolder.from_dict(item)
             for item in await self.client.send_command(
                 "music/recommendations",
-                require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+                require_schema=101 if user is not None else None,
                 **impersonation_arg(self.client.server_info, user),
             )
         ]
@@ -2171,7 +2170,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return media_from_dict(
             await self.client.send_command(
                 "music/item_by_uri",
@@ -2179,7 +2178,7 @@ class Music:
                 allow_update_metadata=allow_update_metadata,
                 require_schema=_listing_require_schema(
                     (101, allow_update_metadata),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             )
@@ -2226,7 +2225,7 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return media_from_dict(
             await self.client.send_command(
                 "music/item",
@@ -2236,7 +2235,7 @@ class Music:
                 allow_update_metadata=allow_update_metadata,
                 require_schema=_listing_require_schema(
                     (101, allow_update_metadata),
-                    (IMPERSONATION_SCHEMA_VERSION, user),
+                    (101, user),
                 ),
                 **impersonation_arg(self.client.server_info, user),
             )
@@ -2257,13 +2256,13 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         if result := await self.client.send_command(
             "music/get_library_item",
             media_type=media_type,
             item_id=item_id,
             provider_instance_id_or_domain=provider_instance_id_or_domain,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         ):
             return cast("MediaItemType", media_from_dict(result))
@@ -3296,14 +3295,14 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return Playlist.from_dict(
             await self.client.send_command(
                 "music/playlists/update",
                 item_id=item_id,
                 update=update,
                 overwrite=overwrite,
-                require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+                require_schema=101 if user is not None else None,
                 **impersonation_arg(self.client.server_info, user),
             )
         )
@@ -3380,13 +3379,13 @@ class Music:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return PodcastEpisode.from_dict(
             await self.client.send_command(
                 "music/podcasts/podcast_episode",
                 item_id=item_id,
                 provider_instance_id_or_domain=provider_instance_id_or_domain,
-                require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+                require_schema=101 if user is not None else None,
                 **impersonation_arg(self.client.server_info, user),
             )
         )

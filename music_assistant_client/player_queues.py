@@ -16,7 +16,7 @@ from music_assistant_models.enums import (
 from music_assistant_models.player_queue import PlayerQueue
 from music_assistant_models.queue_item import QueueItem
 
-from .constants import IMPERSONATION_SCHEMA_VERSION, PLAY_MEDIA_SORT_SCHEMA_VERSION
+from .constants import PLAY_MEDIA_SORT_SCHEMA_VERSION
 from .helpers import LinkedUser, acting_user, impersonation_arg
 
 if TYPE_CHECKING:
@@ -86,7 +86,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         return [
             QueueItem.from_dict(obj)
             for obj in await self.client.send_command(
@@ -94,7 +94,7 @@ class PlayerQueues:
                 queue_id=queue_id,
                 limit=limit,
                 offset=offset,
-                require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+                require_schema=101 if user is not None else None,
                 **impersonation_arg(self.client.server_info, user),
             )
         ]
@@ -109,7 +109,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         assert self.client.server_info  # for type checking
         # from schema version 27+, the server can handle this natively; another user's queue
         # only ever comes from the server, never from this connection's cache
@@ -117,7 +117,7 @@ class PlayerQueues:
             result = await self.client.send_command(
                 "player_queues/get_active_queue",
                 player_id=player_id,
-                require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+                require_schema=101 if user is not None else None,
                 **impersonation_arg(self.client.server_info, user),
             )
             if result or user is not None:
@@ -134,11 +134,11 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/play",
             queue_id=queue_id,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -150,11 +150,11 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/pause",
             queue_id=queue_id,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -166,11 +166,11 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/stop",
             queue_id=queue_id,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -188,12 +188,12 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/resume",
             queue_id=queue_id,
             fade_in=fade_in,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -205,11 +205,11 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/next",
             queue_id=queue_id,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -221,11 +221,11 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/previous",
             queue_id=queue_id,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -237,11 +237,11 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/clear",
             queue_id=queue_id,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -268,13 +268,13 @@ class PlayerQueues:
 
         NOTE: Fails if the given QueueItem is already playing or loaded in the buffer.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/move_item",
             queue_id=queue_id,
             queue_item_id=queue_item_id,
             pos_shift=pos_shift,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -324,12 +324,12 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/delete_item",
             queue_id=queue_id,
             item_id_or_index=item_id_or_index,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -345,12 +345,12 @@ class PlayerQueues:
           LinkedUser reference by auth provider. Requires the users.impersonate scope when
           it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/seek",
             queue_id=queue_id,
             position=position,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -366,12 +366,12 @@ class PlayerQueues:
           LinkedUser reference by auth provider. Requires the users.impersonate scope when
           it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/skip",
             queue_id=queue_id,
             seconds=seconds,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -385,12 +385,12 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/shuffle",
             queue_id=queue_id,
             shuffle_enabled=shuffle_enabled,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -404,12 +404,12 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/repeat",
             queue_id=queue_id,
             repeat_mode=repeat_mode,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -505,14 +505,14 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/play_index",
             queue_id=queue_id,
             index=index,
             seek_position=seek_position,
             fade_in=fade_in,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -616,7 +616,7 @@ class PlayerQueues:
             source_queue_id=source_queue_id,
             target_queue_id=target_queue_id,
             auto_play=auto_play,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else 25,
+            require_schema=101 if user is not None else 25,
             **impersonation_arg(self.client.server_info, user),
         )
 
@@ -654,11 +654,11 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
-        user = acting_user(self.client.server_info, user)
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/play_pause",
             queue_id=queue_id,
-            require_schema=IMPERSONATION_SCHEMA_VERSION if user is not None else None,
+            require_schema=101 if user is not None else None,
             **impersonation_arg(self.client.server_info, user),
         )
 

@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 import orjson
 from music_assistant_models.auth import AuthProviderType
 
-from .constants import IMPERSONATION_SCHEMA_VERSION
 from .exceptions import InvalidServerVersion
 
 if TYPE_CHECKING:
@@ -75,7 +74,7 @@ def impersonation_arg(
 def acting_user(
     server_info: ServerInfoMessage | None,
     user: str | LinkedUser | None,
-    since: int = IMPERSONATION_SCHEMA_VERSION,
+    since: int,
 ) -> str | LinkedUser | None:
     """
     Return the user to send on a command that accepts one since the given schema.
