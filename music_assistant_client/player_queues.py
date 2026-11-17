@@ -611,6 +611,7 @@ class PlayerQueues:
             LinkedUser reference by auth provider. Requires the users.impersonate scope when
             it is another user.
         """
+        user = acting_user(self.client.server_info, user, since=101)
         await self.client.send_command(
             "player_queues/transfer",
             source_queue_id=source_queue_id,

@@ -1,5 +1,6 @@
 """Tests for typed listing API payloads."""
 
+from collections.abc import Awaitable, Callable
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -121,15 +122,39 @@ async def test_nonlibrary_discovery_rejects_older_servers_before_sending(
     send_message.assert_not_awaited()
 
 
+@pytest.mark.parametrize(
+    ("call", "command", "payload"),
+    [
+        pytest.param(
+            lambda q, user: q.get_queue_items("player_1", limit=5, user=user),
+            "player_queues/items",
+            {"queue_id": "player_1", "limit": 5, "offset": 0, "require_schema": None},
+            id="get_queue_items",
+        ),
+        pytest.param(
+            lambda q, user: q.transfer("player_1", "player_2", user=user),
+            "player_queues/transfer",
+            {
+                "source_queue_id": "player_1",
+                "target_queue_id": "player_2",
+                "auto_play": None,
+                "require_schema": 25,
+            },
+            id="transfer",
+        ),
+    ],
+)
 async def test_soft_user_is_dropped_on_older_servers(
-    send_command: AsyncMock, queues: PlayerQueues
+    send_command: AsyncMock,
+    queues: PlayerQueues,
+    call: Callable[[PlayerQueues, LinkedUser], Awaitable[object]],
+    command: str,
+    payload: dict[str, Any],
 ) -> None:
     """A soft linked user runs the command as the connected account on an older server."""
     soft_user = LinkedUser(provider="homeassistant", user_id="ha_user_1", required=False)
-    await queues.get_queue_items("player_1", limit=5, user=soft_user)
-    send_command.assert_awaited_once_with(
-        "player_queues/items", queue_id="player_1", limit=5, offset=0, require_schema=None
-    )
+    await call(queues, soft_user)
+    send_command.assert_awaited_once_with(command, **payload)
 
 
 @pytest.mark.parametrize(
