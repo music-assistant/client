@@ -71,6 +71,27 @@ def impersonation_arg(
     return {"username": plain_user}
 
 
+def acting_user(
+    server_info: ServerInfoMessage | None,
+    user: str | LinkedUser | None,
+    since: int,
+) -> str | LinkedUser | None:
+    """
+    Return the user to send on a command that accepts one since the given schema.
+
+    An older server runs the command without a soft LinkedUser (required False), as it would
+    for an unknown user; a username or a required LinkedUser is kept, so it still fails there.
+
+    :param server_info: The connected server's info (to determine the schema version).
+    :param user: The user to impersonate (or None).
+    :param since: The schema from which the command accepts a user.
+    """
+    schema_version = server_info.schema_version if server_info is not None else 0
+    if isinstance(user, dict) and not user.get("required", True) and schema_version < since:
+        return None
+    return user
+
+
 def compact_media_item_dict(item: dict[str, Any]) -> dict[str, Any]:
     """Return compacted MediaItem dict."""
     for key in (
