@@ -28,6 +28,7 @@ from music_assistant_models.media_items import (
     Genre,
     ItemMapping,
     MediaCollection,
+    MediaItemBookmark,
     MediaItemImage,
     MediaItemMetadata,
     MediaItemTranscriptCue,
@@ -2420,6 +2421,102 @@ class Music:
             "music/mark_unplayed",
             media_item=media_item,
             userid=userid,
+        )
+
+    async def get_bookmarks(
+        self,
+        media_type: MediaType,
+        item_id: str,
+        provider_instance_id_or_domain: str,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> list[MediaItemBookmark]:
+        """
+        Return the user's bookmarks of an audiobook or podcast episode, per copy.
+
+        :param media_type: MediaType.AUDIOBOOK or MediaType.PODCAST_EPISODE.
+        :param item_id: The id on the provider, or the library id of an audiobook.
+        :param provider_instance_id_or_domain: The provider the id belongs to, or "library".
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        user = acting_user(self.client.server_info, user, since=117)
+        return [
+            MediaItemBookmark.from_dict(item)
+            for item in await self.client.send_command(
+                "music/bookmarks",
+                media_type=media_type,
+                item_id=item_id,
+                provider_instance_id_or_domain=provider_instance_id_or_domain,
+                require_schema=117 if user is not None else 102,
+                **impersonation_arg(self.client.server_info, user),
+            )
+        ]
+
+    async def set_bookmark(
+        self,
+        media_type: MediaType,
+        provider_instance_id: str,
+        provider_item_id: str,
+        start: float,
+        name: str,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> None:
+        """
+        Add a bookmark of the user to a copy, or rename the one at start.
+
+        :param media_type: MediaType.AUDIOBOOK or MediaType.PODCAST_EPISODE.
+        :param provider_instance_id: The provider instance of the copy.
+        :param provider_item_id: The id of the audiobook or episode on the provider.
+        :param start: Position of the bookmark in seconds.
+        :param name: Name of the bookmark.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        user = acting_user(self.client.server_info, user, since=117)
+        await self.client.send_command(
+            "music/set_bookmark",
+            media_type=media_type,
+            provider_instance_id=provider_instance_id,
+            provider_item_id=provider_item_id,
+            start=start,
+            name=name,
+            require_schema=117 if user is not None else 102,
+            **impersonation_arg(self.client.server_info, user),
+        )
+
+    async def remove_bookmark(
+        self,
+        media_type: MediaType,
+        provider_instance_id: str,
+        provider_item_id: str,
+        start: float,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> None:
+        """
+        Remove a bookmark of the user from a copy.
+
+        :param media_type: MediaType.AUDIOBOOK or MediaType.PODCAST_EPISODE.
+        :param provider_instance_id: The provider instance of the copy.
+        :param provider_item_id: The id of the audiobook or episode on the provider.
+        :param start: Position of the bookmark in seconds.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        user = acting_user(self.client.server_info, user, since=117)
+        await self.client.send_command(
+            "music/remove_bookmark",
+            media_type=media_type,
+            provider_instance_id=provider_instance_id,
+            provider_item_id=provider_item_id,
+            start=start,
+            require_schema=117 if user is not None else 102,
+            **impersonation_arg(self.client.server_info, user),
         )
 
     async def get_track_by_name(
