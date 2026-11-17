@@ -30,7 +30,7 @@ from music_assistant_models.setup_flow import FlowStepType, SetupFlowStep
 from music_assistant_client.client import MusicAssistantClient
 from music_assistant_client.config import Config
 from music_assistant_client.exceptions import InvalidServerVersion
-from music_assistant_client.helpers import LinkedUser
+from music_assistant_client.helpers import LinkedUser, acting_user
 from music_assistant_client.music import Music, PodcastEpisodeTranscript, _listing_require_schema
 from music_assistant_client.player_queues import PlayerQueues
 
@@ -130,6 +130,24 @@ async def test_soft_user_is_dropped_on_older_servers(
     send_command.assert_awaited_once_with(
         "player_queues/items", queue_id="player_1", limit=5, offset=0, require_schema=None
     )
+
+
+@pytest.mark.parametrize(
+    ("schema_version", "required", "kept"),
+    [
+        pytest.param(105, False, False, id="soft_user_dropped_below_since"),
+        pytest.param(105, True, True, id="required_user_kept_below_since"),
+        pytest.param(117, False, True, id="soft_user_kept_from_since"),
+    ],
+)
+def test_acting_user_follows_the_commands_schema(
+    schema_version: int, required: bool, kept: bool
+) -> None:
+    """A soft user is dropped below the schema the command accepts a user from."""
+    user = LinkedUser(provider="homeassistant", user_id="ha_user_1", required=required)
+    server_info = SimpleNamespace(schema_version=schema_version)
+    result = acting_user(server_info, user, since=117)  # type: ignore[arg-type]
+    assert result == (user if kept else None)
 
 
 async def test_username_is_rejected_on_older_servers(
