@@ -6,7 +6,7 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from music_assistant_models.enums import EventType, MediaType, RepeatMode
+from music_assistant_models.enums import EventType, MediaType, RepeatMode, SleepTimerMode
 from music_assistant_models.errors import (
     MusicAssistantError,
     PlayerCommandFailed,
@@ -14,6 +14,8 @@ from music_assistant_models.errors import (
 )
 from music_assistant_models.player import Player, PlayerMedia, PlayerOptionValueType
 from music_assistant_models.player_control import PlayerControl
+
+from .helpers import LinkedUser, acting_user, impersonation_arg
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -465,23 +467,79 @@ class Players:
             player_id=player_id,
         )
 
-    async def set_sleep_timer(self, player_id: str, seconds: int) -> datetime:
-        """Set a sleep timer for the player."""
-        expiry = await self.client.send_command(
-            "players/sleep_timer/set", player_id=player_id, seconds=seconds
-        )
-        return datetime.fromtimestamp(expiry, tz=UTC)
+    async def set_sleep_timer(
+        self,
+        player_id: str,
+        seconds: int | None = None,
+        mode: SleepTimerMode = SleepTimerMode.DURATION,
+        *,
+        user: str | LinkedUser | None = None,
+    ) -> datetime | None:
+        """
+        Set a sleep timer for the player.
 
-    async def get_sleep_timer(self, player_id: str) -> datetime | None:
-        """Return the active sleep timer expiry for the player."""
-        expiry = await self.client.send_command("players/sleep_timer/get", player_id=player_id)
+        Returns the (estimated) expiry, or None while an end of item or chapter timer waits for
+        paused playback.
+
+        :param seconds: Delay in seconds before playback is stopped, for the DURATION mode.
+        :param mode: The point at which playback is stopped.
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        user = acting_user(self.client.server_info, user, since=117)
+        expiry = await self.client.send_command(
+            "players/sleep_timer/set",
+            player_id=player_id,
+            seconds=seconds,
+            require_schema=(
+                117 if user is not None else 105 if mode != SleepTimerMode.DURATION else None
+            ),
+            **({"mode": mode} if mode != SleepTimerMode.DURATION else {}),
+            **impersonation_arg(self.client.server_info, user),
+        )
         if expiry is None:
             return None
         return datetime.fromtimestamp(expiry, tz=UTC)
 
-    async def clear_sleep_timer(self, player_id: str) -> None:
-        """Clear the active sleep timer for the player."""
-        await self.client.send_command("players/sleep_timer/clear", player_id=player_id)
+    async def get_sleep_timer(
+        self, player_id: str, *, user: str | LinkedUser | None = None
+    ) -> datetime | None:
+        """
+        Return the active sleep timer expiry for the player.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        user = acting_user(self.client.server_info, user, since=117)
+        expiry = await self.client.send_command(
+            "players/sleep_timer/get",
+            player_id=player_id,
+            require_schema=117 if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
+        if expiry is None:
+            return None
+        return datetime.fromtimestamp(expiry, tz=UTC)
+
+    async def clear_sleep_timer(
+        self, player_id: str, *, user: str | LinkedUser | None = None
+    ) -> None:
+        """
+        Clear the active sleep timer for the player.
+
+        :param user: Run the command on behalf of this user: a user_id or username, or a
+            LinkedUser reference by auth provider. Requires the users.impersonate scope when
+            it is another user.
+        """
+        user = acting_user(self.client.server_info, user, since=117)
+        await self.client.send_command(
+            "players/sleep_timer/clear",
+            player_id=player_id,
+            require_schema=117 if user is not None else None,
+            **impersonation_arg(self.client.server_info, user),
+        )
 
     async def _get_players(self) -> list[Player]:
         """Fetch all Players from the server."""
